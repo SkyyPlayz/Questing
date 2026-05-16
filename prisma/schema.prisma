@@ -12,6 +12,13 @@ enum Role {
   ADMIN
 }
 
+enum UserStatus {
+  PENDING_VERIFICATION
+  ACTIVE
+  SUSPENDED
+  BANNED
+}
+
 enum JobStatus {
   DRAFT
   OPEN
@@ -28,23 +35,88 @@ enum ApplicationStatus {
   WITHDRAWN
 }
 
-model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  name         String?
-  passwordHash String
-  role         Role     @default(WORKER)
-  bio          String?
-  phone        String?
-  location     String?
-  avatarUrl    String?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+enum PaymentStatus {
+  PENDING
+  HELD
+  RELEASED
+  VOIDED
+  REFUNDED
+}
 
-  postedJobs   Job[]         @relation("PosterJobs")
-  applications Application[]
-  sessions     Session[]
-  accounts     Account[]
+enum RiskLevel {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum IncidentStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum DisputeStatus {
+  OPEN
+  RESOLVED
+  DISMISSED
+}
+
+enum DisputeOutcome {
+  WORKER_FAVOR
+  POSTER_FAVOR
+  SPLIT
+  DISMISSED
+}
+
+model User {
+  id            String     @id @default(cuid())
+  email         String     @unique
+  name          String?
+  passwordHash  String
+  role          Role       @default(WORKER)
+  status        UserStatus @default(PENDING_VERIFICATION)
+  emailVerified DateTime?
+  bio           String?
+  phone         String?
+  location      String?
+  avatarUrl     String?
+  createdAt     DateTime   @default(now())
+  updatedAt     DateTime   @updatedAt
+
+  postedJobs      Job[]            @relation("PosterJobs")
+  applications    Application[]
+  sessions        Session[]
+  accounts        Account[]
+  workerProfile   WorkerProfile?
+  posterProfile   PosterProfile?
+  ratingsGiven    Rating[]         @relation("RatingFrom")
+  ratingsReceived Rating[]         @relation("RatingTo")
+  competencyScore CompetencyScore?
+  riskScore       RiskScore?
+  incidents       SafetyIncident[] @relation("IncidentReporter")
+  adminNotes      AdminNote[]
+}
+
+model WorkerProfile {
+  id                    String   @id @default(cuid())
+  userId                String   @unique
+  skills                String[]
+  availability          String?
+  hourlyRate            Float?
+  idVerified            Boolean  @default(false)
+  backgroundCheckStatus String   @default("PENDING")
+  user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt             DateTime @updatedAt
+}
+
+model PosterProfile {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  companyName String?
+  bio         String?
+  website     String?
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt   DateTime @updatedAt
 }
 
 model Account {
@@ -83,22 +155,25 @@ model VerificationToken {
 }
 
 model Job {
-  id           String      @id @default(cuid())
+  id           String         @id @default(cuid())
   title        String
   description  String
   category     String
   location     String
   payRate      Float
-  payUnit      String      @default("hour")
+  payUnit      String         @default("hour")
   startDate    DateTime?
   endDate      DateTime?
-  status       JobStatus   @default(DRAFT)
+  status       JobStatus      @default(DRAFT)
   posterId     String
-  poster       User        @relation("PosterJobs", fields: [posterId], references: [id])
+  poster       User           @relation("PosterJobs", fields: [posterId], references: [id])
   applications Application[]
   payment      Payment?
-  createdAt    DateTime    @default(now())
-  updatedAt    DateTime    @updatedAt
+  ratings      Rating[]
+  disputes     Dispute[]
+  incidents    SafetyIncident[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
 }
 
 model Application {
@@ -115,23 +190,87 @@ model Application {
   @@unique([jobId, workerId])
 }
 
-enum PaymentStatus {
-  PENDING
-  HELD
-  RELEASED
-  VOIDED
-  REFUNDED
+model Payment {
+  id                      String        @id @default(cuid())
+  jobId                   String        @unique
+  stripePaymentIntentId   String?
+  stripeCheckoutSessionId String?
+  amount                  Int
+  currency                String        @default("usd")
+  status                  PaymentStatus @default(PENDING)
+  job                     Job           @relation(fields: [jobId], references: [id])
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
 }
 
-model Payment {
-  id                   String        @id @default(cuid())
-  jobId                String        @unique
-  stripePaymentIntentId String?
-  stripeCheckoutSessionId String?
-  amount               Int
-  currency             String        @default("usd")
-  status               PaymentStatus @default(PENDING)
-  job                  Job           @relation(fields: [jobId], references: [id])
-  createdAt            DateTime      @default(now())
-  updatedAt            DateTime      @updatedAt
+model Rating {
+  id         String   @id @default(cuid())
+  jobId      String
+  fromUserId String
+  toUserId   String
+  score      Int
+  comment    String?
+  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  fromUser   User     @relation("RatingFrom", fields: [fromUserId], references: [id])
+  toUser     User     @relation("RatingTo", fields: [toUserId], references: [id])
+  createdAt  DateTime @default(now())
+
+  @@unique([jobId, fromUserId])
+}
+
+model CompetencyScore {
+  id            String   @id @default(cuid())
+  userId        String   @unique
+  avgRating     Float    @default(0)
+  jobsCompleted Int      @default(0)
+  reliabilityPct Float   @default(0)
+  overallScore  Float    @default(0)
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt     DateTime @updatedAt
+}
+
+model SafetyIncident {
+  id          String         @id @default(cuid())
+  jobId       String
+  reporterId  String
+  severity    String
+  description String
+  status      IncidentStatus @default(OPEN)
+  resolution  String?
+  riskLevel   RiskLevel?
+  job         Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  reporter    User           @relation("IncidentReporter", fields: [reporterId], references: [id])
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+}
+
+model RiskScore {
+  id            String    @id @default(cuid())
+  userId        String    @unique
+  riskLevel     RiskLevel @default(LOW)
+  incidentCount Int       @default(0)
+  overrideNote  String?
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt     DateTime  @updatedAt
+}
+
+model Dispute {
+  id         String          @id @default(cuid())
+  jobId      String
+  raisedById String
+  status     DisputeStatus   @default(OPEN)
+  outcome    DisputeOutcome?
+  adminNote  String?
+  job        Job             @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  createdAt  DateTime        @default(now())
+  updatedAt  DateTime        @updatedAt
+}
+
+model AdminNote {
+  id        String   @id @default(cuid())
+  userId    String
+  note      String
+  authorId  String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
 }
