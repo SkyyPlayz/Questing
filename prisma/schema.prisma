@@ -1,0 +1,115 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  WORKER
+  POSTER
+  ADMIN
+}
+
+enum JobStatus {
+  DRAFT
+  OPEN
+  IN_PROGRESS
+  COMPLETED
+  CANCELLED
+  DISPUTED
+}
+
+enum ApplicationStatus {
+  PENDING
+  ACCEPTED
+  REJECTED
+  WITHDRAWN
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  name         String?
+  passwordHash String
+  role         Role     @default(WORKER)
+  bio          String?
+  phone        String?
+  location     String?
+  avatarUrl    String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  postedJobs   Job[]         @relation("PosterJobs")
+  applications Application[]
+  sessions     Session[]
+  accounts     Account[]
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String
+  type              String
+  provider          String
+  providerAccountId String
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique
+  userId       String
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model VerificationToken {
+  identifier String
+  token      String   @unique
+  expires    DateTime
+
+  @@unique([identifier, token])
+}
+
+model Job {
+  id           String      @id @default(cuid())
+  title        String
+  description  String
+  category     String
+  location     String
+  payRate      Float
+  payUnit      String      @default("hour")
+  startDate    DateTime?
+  endDate      DateTime?
+  status       JobStatus   @default(DRAFT)
+  posterId     String
+  poster       User        @relation("PosterJobs", fields: [posterId], references: [id])
+  applications Application[]
+  createdAt    DateTime    @default(now())
+  updatedAt    DateTime    @updatedAt
+}
+
+model Application {
+  id        String            @id @default(cuid())
+  jobId     String
+  workerId  String
+  message   String?
+  status    ApplicationStatus @default(PENDING)
+  job       Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  worker    User              @relation(fields: [workerId], references: [id])
+  createdAt DateTime          @default(now())
+  updatedAt DateTime          @updatedAt
+
+  @@unique([jobId, workerId])
+}
