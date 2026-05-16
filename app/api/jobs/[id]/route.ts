@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
+
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -59,6 +62,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const updated = await prisma.job.update({
     where: { id },
+    include: { payment: true },
     data: {
       ...(title && { title }),
       ...(description && { description }),
@@ -71,6 +75,17 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       ...(status && { status: status as JobStatus }),
     },
   });
+
+  if (status && status !== job.status && updated.payment?.stripePaymentIntentId) {
+    const pi = updated.payment.stripePaymentIntentId;
+    if (status === "COMPLETED" && updated.payment.status === "HELD") {
+      await stripe.paymentIntents.capture(pi);
+      await prisma.payment.update({ where: { id: updated.payment.id }, data: { status: "RELEASED" } });
+    } else if (status === "CANCELLED" && updated.payment.status === "HELD") {
+      await stripe.paymentIntents.cancel(pi);
+      await prisma.payment.update({ where: { id: updated.payment.id }, data: { status: "VOIDED" } });
+    }
+  }
 
   return NextResponse.json(updated);
 }

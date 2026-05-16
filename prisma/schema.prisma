@@ -96,6 +96,7 @@ model Job {
   posterId     String
   poster       User        @relation("PosterJobs", fields: [posterId], references: [id])
   applications Application[]
+  payment      Payment?
   createdAt    DateTime    @default(now())
   updatedAt    DateTime    @updatedAt
 }
@@ -112,4 +113,25 @@ model Application {
   updatedAt DateTime          @updatedAt
 
   @@unique([jobId, workerId])
+}
+
+enum PaymentStatus {
+  PENDING
+  HELD
+  RELEASED
+  VOIDED
+  REFUNDED
+}
+
+model Payment {
+  id                   String        @id @default(cuid())
+  jobId                String        @unique
+  stripePaymentIntentId String?
+  stripeCheckoutSessionId String?
+  amount               Int
+  currency             String        @default("usd")
+  status               PaymentStatus @default(PENDING)
+  job                  Job           @relation(fields: [jobId], references: [id])
+  createdAt            DateTime      @default(now())
+  updatedAt            DateTime      @updatedAt
 }
