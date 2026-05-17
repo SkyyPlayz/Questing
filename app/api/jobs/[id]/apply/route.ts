@@ -31,37 +31,51 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Already applied" }, { status: 409 });
   }
 
-  // FCFS: check if any other applications exist for this job
-  const otherApps = await prisma.application.findMany({
-    where: { jobId: id, status: { in: ["PENDING", "FCFS_ACCEPTED"] } },
-  });
+  // FCFS check: only apply if job uses FCFS mode
+  if (job.fcfsMode === true) {
+    const otherApps = await prisma.application.findMany({
+      where: { jobId: id, status: { in: ["PENDING", "FCFS_ACCEPTED"] } },
+    });
 
-  if (otherApps.length === 0) {
-    // First applicant — auto-lock the job (FCFS)
+    if (otherApps.length === 0) {
+      // First applicant — auto-lock the job (FCFS)
+      const application = await prisma.application.create({
+        data: {
+          jobId: id,
+          workerId: user.id,
+          message: message || null,
+          status: "FCFS_ACCEPTED",
+          acceptedAt: new Date(),
+        },
+      });
+
+      // Move job to IN_PROGRESS
+      await prisma.job.update({
+        where: { id },
+        data: { status: "IN_PROGRESS" },
+      });
+
+      // Auto-create PRIVATE chat thread between poster and FCFS worker
+      await prisma.chatThread.create({
+        data: { jobId: id, threadType: "PRIVATE" },
+      });
+
+      return NextResponse.json({
+        ...application,
+        jobStatus: "IN_PROGRESS",
+        fcfsLocked: true,
+      }, { status: 201 });
+    }
+
+    // Job already has an FCFS applicant — new application goes as PENDING for poster review
     const application = await prisma.application.create({
-      data: {
-        jobId: id,
-        workerId: user.id,
-        message: message || null,
-        status: "FCFS_ACCEPTED",
-        acceptedAt: new Date(),
-      },
+      data: { jobId: id, workerId: user.id, message: message || null },
     });
 
-    // Move job to IN_PROGRESS
-    await prisma.job.update({
-      where: { id },
-      data: { status: "IN_PROGRESS" },
-    });
-
-    return NextResponse.json({
-      ...application,
-      jobStatus: "IN_PROGRESS",
-      fcfsLocked: true,
-    }, { status: 201 });
+    return NextResponse.json(application, { status: 201 });
   }
 
-  // Job already has an FCFS applicant — new application goes as PENDING for poster review
+  // Poster-review mode: all applications go as PENDING
   const application = await prisma.application.create({
     data: { jobId: id, workerId: user.id, message: message || null },
   });
@@ -111,6 +125,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       prisma.job.update({
         where: { id },
         data: { status: "IN_PROGRESS" },
+      }),
+      prisma.chatThread.create({
+        data: { jobId: id, threadType: "PRIVATE" },
       }),
     ]);
   } else if (action === "reject") {

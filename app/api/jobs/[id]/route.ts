@@ -17,6 +17,14 @@ export async function GET(_req: NextRequest, { params }: Params) {
       applications: {
         include: { worker: { select: { id: true, name: true, email: true } } },
       },
+      jobCheckIns: {
+        include: { worker: { select: { id: true, name: true } } },
+        orderBy: { timestamp: "desc" },
+      },
+      incidents: {
+        where: { status: "OPEN" },
+        select: { id: true, severity: true, description: true, createdAt: true },
+      },
     },
   });
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -75,6 +83,13 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       ...(status && { status: status as JobStatus }),
     },
   });
+
+  // Auto-create PUBLIC_QA chat thread when job is published (DRAFT -> OPEN)
+  if (status === "OPEN" && job.status === "DRAFT") {
+    await prisma.chatThread.create({
+      data: { jobId: id, threadType: "PUBLIC_QA" },
+    });
+  }
 
   if (status && status !== job.status && updated.payment?.stripePaymentIntentId) {
     const pi = updated.payment.stripePaymentIntentId;

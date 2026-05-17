@@ -65,6 +65,9 @@ export default function JobDetailClient({
     message: string;
   } | null>(null);
   const [checkInError, setCheckInError] = useState("");
+  const [threadCreating, setThreadCreating] = useState(false);
+  const [threadError, setThreadError] = useState("");
+  const [threadSuccess, setThreadSuccess] = useState("");
 
   const statusColors: Record<string, string> = {
     DRAFT: "bg-gray-100 text-gray-700",
@@ -120,6 +123,25 @@ export default function JobDetailClient({
     });
     setStatusLoading(false);
     if (res.ok) router.refresh();
+  }
+
+  async function handleThreadCreate(threadType: "PUBLIC_QA" | "PRIVATE", workerId?: string) {
+    setThreadCreating(true);
+    setThreadError("");
+    setThreadSuccess("");
+    const res = await fetch(`/api/jobs/${job.id}/chat/threads`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ threadType, workerId }),
+    });
+    setThreadCreating(false);
+    if (!res.ok) {
+      const data = await res.json();
+      setThreadError(data.error || "Failed to create thread");
+    } else {
+      setThreadSuccess(`Chat thread created (${threadType})`);
+      router.refresh();
+    }
   }
 
   async function handleCheckIn() {
@@ -269,6 +291,36 @@ export default function JobDetailClient({
                 </div>
               </div>
             )}
+
+            {/* Chat thread management */}
+            <div className="border-t pt-4 mt-4">
+              <h2 className="font-semibold mb-3">💬 Chat Threads</h2>
+              {threadSuccess && <p className="text-green-600 text-sm mb-2">{threadSuccess}</p>}
+              {threadError && <p className="text-red-600 text-sm mb-2">{threadError}</p>}
+              <div className="flex gap-2 flex-wrap">
+                <button
+                  onClick={() => handleThreadCreate("PUBLIC_QA")}
+                  disabled={threadCreating}
+                  className="bg-blue-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-blue-700 disabled:opacity-50"
+                >
+                  {threadCreating ? "Creating..." : "Create Public Q&A"}
+                </button>
+                {job.applications.filter(a => a.status === "ACCEPTED" || a.status === "FCFS_ACCEPTED").length > 0 && (
+                  job.applications
+                    .filter(a => a.status === "ACCEPTED" || a.status === "FCFS_ACCEPTED")
+                    .map(app => (
+                      <button
+                        key={app.id}
+                        onClick={() => handleThreadCreate("PRIVATE", app.workerId)}
+                        disabled={threadCreating}
+                        className="bg-indigo-600 text-white px-4 py-2 rounded text-sm font-medium hover:bg-indigo-700 disabled:opacity-50"
+                      >
+                        {threadCreating ? "Creating..." : `Private Chat with ${app.worker.name}`}
+                      </button>
+                    ))
+                )}
+              </div>
+            </div>
           </div>
         )}
 

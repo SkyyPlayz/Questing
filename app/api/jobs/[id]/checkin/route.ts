@@ -76,6 +76,30 @@ export async function POST(req: NextRequest, { params }: Params) {
     outOfRange = false;
   }
 
+  // Record firstCheckInAt on the application if this is the worker's first check-in
+  const existingCheckIns = await prisma.jobCheckIn.count({ where: { applicationId: acceptedApp.id } });
+  if (existingCheckIns === 0) {
+    await prisma.application.update({
+      where: { id: acceptedApp.id },
+      data: { firstCheckInAt: new Date() },
+    });
+  }
+
+  // If out of range, flag it as a safety incident for the poster to review
+  let outOfRangeIncident = null;
+  if (outOfRange) {
+    outOfRangeIncident = await prisma.safetyIncident.create({
+      data: {
+        jobId: id,
+        reporterId: user.id,
+        severity: "LOW",
+        description: `Worker check-in out of range: ${distanceM?.toFixed(0)}m from job location (${latitude.toFixed(6)}, ${longitude.toFixed(6)})`,
+        status: "OPEN",
+        riskLevel: "MEDIUM",
+      },
+    });
+  }
+
   const checkIn = await prisma.jobCheckIn.create({
     data: {
       jobId: id,
@@ -88,12 +112,17 @@ export async function POST(req: NextRequest, { params }: Params) {
     },
   });
 
+  const totalCheckIns = existingCheckIns + 1;
+
   return NextResponse.json({
     ...checkIn,
     verified,
     outOfRange,
     distanceM,
     rangeMeters: 500,
+    totalCheckIns,
+    firstCheckInAt: existingCheckIns === 0 ? new Date() : null,
+    outOfRangeIncident: outOfRangeIncident ? { id: outOfRangeIncident.id, description: outOfRangeIncident.description } : null,
   }, { status: 201 });
 }
 
