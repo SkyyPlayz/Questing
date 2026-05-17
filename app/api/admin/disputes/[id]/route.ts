@@ -35,13 +35,53 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (outcome === "WORKER_FAVOR" || outcome === "POSTER_FAVOR") {
       await stripe.paymentIntents.capture(payment.stripePaymentIntentId);
       await prisma.payment.update({ where: { id: payment.id }, data: { status: "RELEASED" } });
+
+      // Record platform fee (full amount) — only if one doesn't already exist
+      const feeConfig = await prisma.adminConfig.findUnique({ where: { key: "PLATFORM_FEE_PERCENT" } });
+      const feePercent = feeConfig ? parseFloat(feeConfig.value) || 0.10 : 0.10;
+      const platformFeeCents = Math.round(payment.amount * feePercent);
+      const existingFee = await prisma.platformFee.findUnique({ where: { jobId: dispute.jobId } });
+      if (!existingFee) {
+        await prisma.platformFee.create({
+          data: {
+            jobId: dispute.jobId,
+            amount: platformFeeCents,
+            type: "PLATFORM_SERVICE",
+            percent: feePercent,
+            status: "RELEASED",
+          },
+        });
+      }
     } else if (outcome === "SPLIT") {
       const half = Math.floor(payment.amount / 2);
       await stripe.paymentIntents.capture(payment.stripePaymentIntentId, { amount_to_capture: half });
       await prisma.payment.update({ where: { id: payment.id }, data: { status: "RELEASED" } });
+
+      // Record platform fee (half amount) — only if one doesn't already exist
+      const feeConfig = await prisma.adminConfig.findUnique({ where: { key: "PLATFORM_FEE_PERCENT" } });
+      const feePercent = feeConfig ? parseFloat(feeConfig.value) || 0.10 : 0.10;
+      const platformFeeCents = Math.round(half * feePercent);
+      const existingFee = await prisma.platformFee.findUnique({ where: { jobId: dispute.jobId } });
+      if (!existingFee) {
+        await prisma.platformFee.create({
+          data: {
+            jobId: dispute.jobId,
+            amount: platformFeeCents,
+            type: "PLATFORM_SERVICE",
+            percent: feePercent,
+            status: "RELEASED",
+          },
+        });
+      }
     } else if (outcome === "DISMISSED") {
       await stripe.paymentIntents.cancel(payment.stripePaymentIntentId);
       await prisma.payment.update({ where: { id: payment.id }, data: { status: "VOIDED" } });
+
+      // Void any pending platform fee for this job
+      await prisma.platformFee.updateMany({
+        where: { jobId: dispute.jobId, status: "PENDING" },
+        data: { status: "VOIDED" },
+      });
     }
   }
 

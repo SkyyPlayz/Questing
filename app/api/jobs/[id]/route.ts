@@ -94,11 +94,33 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (status && status !== job.status && updated.payment?.stripePaymentIntentId) {
     const pi = updated.payment.stripePaymentIntentId;
     if (status === "COMPLETED" && updated.payment.status === "HELD") {
+      // Calculate platform fee from admin-configurable rate
+      const feeConfig = await prisma.adminConfig.findUnique({ where: { key: "PLATFORM_FEE_PERCENT" } });
+      const feePercent = feeConfig ? parseFloat(feeConfig.value) || 0.10 : 0.10;
+      const platformFeeCents = Math.round(updated.payment.amount * feePercent);
+
       await stripe.paymentIntents.capture(pi);
       await prisma.payment.update({ where: { id: updated.payment.id }, data: { status: "RELEASED" } });
+
+      // Record the platform fee
+      await prisma.platformFee.create({
+        data: {
+          jobId: updated.id,
+          amount: platformFeeCents,
+          type: "PLATFORM_SERVICE",
+          percent: feePercent,
+          status: "RELEASED",
+        },
+      });
     } else if (status === "CANCELLED" && updated.payment.status === "HELD") {
       await stripe.paymentIntents.cancel(pi);
       await prisma.payment.update({ where: { id: updated.payment.id }, data: { status: "VOIDED" } });
+
+      // Void any pending platform fee for this job
+      await prisma.platformFee.updateMany({
+        where: { jobId: updated.id, status: "PENDING" },
+        data: { status: "VOIDED" },
+      });
     }
   }
 

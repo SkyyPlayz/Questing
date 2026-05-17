@@ -22,8 +22,18 @@ export default async function Nav() {
               </Link>
             )}
             {user.role === "WORKER" && (
-              <Link href="/jobs/active" className="text-gray-600 hover:text-blue-600">
-                My Jobs
+              <>
+                <Link href="/jobs/active" className="text-gray-600 hover:text-blue-600">
+                  My Jobs
+                </Link>
+                <Link href="/profile" className="text-gray-600 hover:text-blue-600">
+                  Profile
+                </Link>
+              </>
+            )}
+            {user.role === "ADMIN" && (
+              <Link href="/admin" className="text-gray-600 hover:text-blue-600">
+                Admin
               </Link>
             )}
             <span className="text-gray-400">|</span>
