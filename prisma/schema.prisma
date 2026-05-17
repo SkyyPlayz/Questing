@@ -96,6 +96,9 @@ model User {
   riskScore       RiskScore?
   incidents       SafetyIncident[] @relation("IncidentReporter")
   adminNotes      AdminNote[]
+  backgroundCheckFees BackgroundCheckFee[]
+  jobCheckIns     JobCheckIn[]       @relation("WorkerCheckIns")
+  sentMessages    ChatMessage[]      @relation("MessageSender")
 }
 
 model WorkerProfile {
@@ -161,6 +164,8 @@ model Job {
   description  String
   category     String
   location     String
+  locationLat  Float?
+  locationLng  Float?
   payRate      Float
   payUnit      String         @default("hour")
   startDate    DateTime?
@@ -173,6 +178,11 @@ model Job {
   ratings      Rating[]
   disputes     Dispute[]
   incidents    SafetyIncident[]
+  platformFees PlatformFee[]
+  jobCheckIns  JobCheckIn[]         @relation("JobCheckIns")
+  chatThreads  ChatThread[]
+  fcfsMode     Boolean            @default(true)
+  fcfsTimeoutMinutes Int?         @default(30)
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 }
@@ -184,6 +194,7 @@ model Application {
   message   String?
   status    ApplicationStatus @default(PENDING)
   acceptedAt DateTime?
+  firstCheckInAt DateTime?
   job       Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
   worker    User              @relation(fields: [workerId], references: [id])
   checkIns  JobCheckIn[]
@@ -329,9 +340,40 @@ model JobCheckIn {
   distanceM  Float?
   application Application @relation(fields: [applicationId], references: [id])
   applicationId String
-  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  worker     User     @relation(fields: [workerId], references: [id])
+  job        Job      @relation("JobCheckIns", fields: [jobId], references: [id], onDelete: Cascade)
+  worker     User     @relation("WorkerCheckIns", fields: [workerId], references: [id])
   createdAt  DateTime @default(now())
 
   @@index([jobId, workerId])
+}
+
+enum ChatThreadType {
+  PUBLIC_QA
+  PRIVATE
+}
+
+model ChatThread {
+  id           String         @id @default(cuid())
+  jobId        String
+  threadType   ChatThreadType @default(PUBLIC_QA)
+  lastMessageAt DateTime?
+  job          Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  messages     ChatMessage[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([jobId, threadType])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  threadId  String
+  senderId  String
+  content   String
+  thread    ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender    User       @relation("MessageSender", fields: [senderId], references: [id])
+  createdAt DateTime   @default(now())
+
+  @@index([threadId])
+  @@index([threadId, createdAt])
 }

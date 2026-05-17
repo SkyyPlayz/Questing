@@ -1,13 +1,25 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import JobChat from "@/app/components/JobChat";
 
 type Application = {
   id: string;
   workerId: string;
   status: string;
   message: string | null;
+  acceptedAt: string | null;
   worker: { id: string; name: string | null; email: string };
+};
+
+type JobCheckIn = {
+  id: string;
+  latitude: number;
+  longitude: number;
+  distanceM: number;
+  verified: boolean;
+  timestamp: string;
+  worker: { id: string; name: string | null };
 };
 
 type Job = {
@@ -16,6 +28,8 @@ type Job = {
   description: string;
   category: string;
   location: string;
+  locationLat: number | null;
+  locationLng: number | null;
   payRate: number;
   payUnit: string;
   status: string;
@@ -23,6 +37,7 @@ type Job = {
   endDate: string | null;
   poster: { id: string; name: string | null };
   applications: Application[];
+  jobCheckIns: JobCheckIn[];
 };
 
 export default function JobDetailClient({
@@ -43,6 +58,13 @@ export default function JobDetailClient({
   const [applying, setApplying] = useState(false);
   const [error, setError] = useState("");
   const [statusLoading, setStatusLoading] = useState(false);
+  const [checkInLoading, setCheckInLoading] = useState(false);
+  const [checkInResult, setCheckInResult] = useState<{
+    distanceM: number;
+    verified: boolean;
+    message: string;
+  } | null>(null);
+  const [checkInError, setCheckInError] = useState("");
 
   const statusColors: Record<string, string> = {
     DRAFT: "bg-gray-100 text-gray-700",
@@ -51,6 +73,15 @@ export default function JobDetailClient({
     COMPLETED: "bg-purple-100 text-purple-700",
     CANCELLED: "bg-red-100 text-red-700",
     DISPUTED: "bg-yellow-100 text-yellow-700",
+    FCFS_ACCEPTED: "bg-emerald-100 text-emerald-700",
+  };
+
+  const appStatusColors: Record<string, string> = {
+    PENDING: "bg-gray-100 text-gray-700",
+    ACCEPTED: "bg-green-100 text-green-700",
+    REJECTED: "bg-red-100 text-red-700",
+    WITHDRAWN: "bg-orange-100 text-orange-700",
+    FCFS_ACCEPTED: "bg-emerald-100 text-emerald-700",
   };
 
   async function handleApply(e: React.FormEvent) {
@@ -89,6 +120,55 @@ export default function JobDetailClient({
     });
     setStatusLoading(false);
     if (res.ok) router.refresh();
+  }
+
+  async function handleCheckIn() {
+    setCheckInLoading(true);
+    setCheckInError("");
+    setCheckInResult(null);
+
+    // Try to get geolocation from browser
+    let lat: number, lng: number;
+    if (navigator.geolocation) {
+      lat = await new Promise<number>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos.coords.latitude),
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      });
+      lng = await new Promise<number>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => resolve(pos.coords.longitude),
+          (err) => reject(err),
+          { enableHighAccuracy: true, timeout: 10000 }
+        );
+      });
+    } else {
+      setCheckInError("Geolocation not available in this browser");
+      setCheckInLoading(false);
+      return;
+    }
+
+    const res = await fetch(`/api/jobs/${job.id}/checkin`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ latitude: lat, longitude: lng }),
+    });
+    setCheckInLoading(false);
+
+    if (!res.ok) {
+      const data = await res.json();
+      setCheckInError(data.error || "Check-in failed");
+    } else {
+      const data = await res.json();
+      setCheckInResult({
+        distanceM: data.distanceM,
+        verified: data.verified,
+        message: data.message,
+      });
+      router.refresh();
+    }
   }
 
   return (
@@ -161,14 +241,11 @@ export default function JobDetailClient({
                         {app.message && <p className="text-sm text-gray-700 mt-1">{app.message}</p>}
                         <span
                           className={`text-xs font-medium mt-1 inline-block px-2 py-0.5 rounded-full ${
-                            app.status === "ACCEPTED"
-                              ? "bg-green-100 text-green-700"
-                              : app.status === "REJECTED"
-                              ? "bg-red-100 text-red-700"
-                              : "bg-gray-100 text-gray-700"
+                            appStatusColors[app.status] || "bg-gray-100 text-gray-700"
                           }`}
                         >
                           {app.status}
+                          {app.status === "FCFS_ACCEPTED" && " (FCFS)"}
                         </span>
                       </div>
                       {app.status === "PENDING" && job.status === "OPEN" && (
@@ -230,6 +307,70 @@ export default function JobDetailClient({
             )}
           </div>
         )}
+
+        {/* GPS Check-in section — for accepted workers on IN_PROGRESS jobs */}
+        {userRole === "WORKER" && job.status === "IN_PROGRESS" && !isPoster && userApplication &&
+          (userApplication.status === "FCFS_ACCEPTED" || userApplication.status === "ACCEPTED") && (
+          <div className="border-t pt-4 mt-4">
+            <h2 className="font-semibold mb-3">📍 GPS Check-In</h2>
+            <p className="text-sm text-gray-600 mb-3">
+              Confirm your location at the job site. Verified if within 500m of the job location.
+            </p>
+            {checkInResult && (
+              <div className={`rounded p-3 mb-3 text-sm ${
+                checkInResult.verified
+                  ? "bg-emerald-50 border border-emerald-200 text-emerald-800"
+                  : "bg-amber-50 border border-amber-200 text-amber-800"
+              }`}>
+                <p className="font-semibold">
+                  {checkInResult.verified ? "✅ Verified" : "⚠️ Flagged"}
+                </p>
+                <p>Distance: {checkInResult.distanceM}m from job location</p>
+                <p>{checkInResult.message}</p>
+              </div>
+            )}
+            {checkInError && <p className="text-red-600 text-sm mb-3">{checkInError}</p>}
+            <button
+              onClick={handleCheckIn}
+              disabled={checkInLoading}
+              className="bg-indigo-600 text-white px-5 py-2 rounded font-medium hover:bg-indigo-700 disabled:opacity-50 text-sm"
+            >
+              {checkInLoading ? "Checking location..." : "Check In Now"}
+            </button>
+          </div>
+        )}
+
+        {/* Check-in history — for poster and accepted workers */}
+        {job.jobCheckIns.length > 0 && (
+          <div className="border-t pt-4 mt-4">
+            <h2 className="font-semibold mb-3">Check-In History ({job.jobCheckIns.length})</h2>
+            <div className="space-y-2">
+              {job.jobCheckIns.map((ci) => (
+                <div key={ci.id} className="border rounded p-2 flex items-center justify-between text-sm">
+                  <div>
+                    <p className="font-medium">{ci.worker.name}</p>
+                    <p className="text-xs text-gray-500">
+                      {ci.latitude.toFixed(4)}, {ci.longitude.toFixed(4)} · {new Date(ci.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-gray-600">{ci.distanceM}m</span>
+                    <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                      ci.verified
+                        ? "bg-emerald-100 text-emerald-700"
+                        : "bg-amber-100 text-amber-700"
+                    }`}>
+                      {ci.verified ? "Verified" : "Flagged"}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Job Chat */}
+        <JobChat jobId={job.id} userId={userId} isPoster={isPoster} />
       </div>
     </div>
   );

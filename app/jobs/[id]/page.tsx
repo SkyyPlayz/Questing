@@ -17,6 +17,10 @@ export default async function JobDetailPage({ params }: Params) {
       applications: {
         include: { worker: { select: { id: true, name: true, email: true } } },
       },
+      jobCheckIns: {
+        include: { worker: { select: { id: true, name: true } } },
+        orderBy: { createdAt: "desc" },
+      },
     },
   });
 

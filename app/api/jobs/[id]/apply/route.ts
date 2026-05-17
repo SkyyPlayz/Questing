@@ -31,6 +31,37 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Already applied" }, { status: 409 });
   }
 
+  // FCFS: check if any other applications exist for this job
+  const otherApps = await prisma.application.findMany({
+    where: { jobId: id, status: { in: ["PENDING", "FCFS_ACCEPTED"] } },
+  });
+
+  if (otherApps.length === 0) {
+    // First applicant — auto-lock the job (FCFS)
+    const application = await prisma.application.create({
+      data: {
+        jobId: id,
+        workerId: user.id,
+        message: message || null,
+        status: "FCFS_ACCEPTED",
+        acceptedAt: new Date(),
+      },
+    });
+
+    // Move job to IN_PROGRESS
+    await prisma.job.update({
+      where: { id },
+      data: { status: "IN_PROGRESS" },
+    });
+
+    return NextResponse.json({
+      ...application,
+      jobStatus: "IN_PROGRESS",
+      fcfsLocked: true,
+    }, { status: 201 });
+  }
+
+  // Job already has an FCFS applicant — new application goes as PENDING for poster review
   const application = await prisma.application.create({
     data: { jobId: id, workerId: user.id, message: message || null },
   });
@@ -64,7 +95,10 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   if (action === "accept") {
-    // Accept this applicant, reject others, move job to IN_PROGRESS
+    // Only allowed for PENDING apps when job is still OPEN (non-FCFS fallback)
+    if (application.status !== "PENDING" || job.status !== "OPEN") {
+      return NextResponse.json({ error: "Cannot accept — job is FCFS-locked or application not pending" }, { status: 400 });
+    }
     await prisma.$transaction([
       prisma.application.update({
         where: { id: applicationId },
@@ -80,9 +114,25 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       }),
     ]);
   } else if (action === "reject") {
+    // Only allowed for PENDING apps when job is still OPEN
+    if (application.status !== "PENDING" || job.status !== "OPEN") {
+      return NextResponse.json({ error: "Cannot reject — job is FCFS-locked or application not pending" }, { status: 400 });
+    }
     await prisma.application.update({
       where: { id: applicationId },
       data: { status: "REJECTED" },
+    });
+  } else if (action === "withdraw") {
+    // Worker can withdraw their pending application
+    if (application.workerId !== user.id) {
+      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    }
+    if (application.status !== "PENDING") {
+      return NextResponse.json({ error: "Cannot withdraw — application not pending" }, { status: 400 });
+    }
+    await prisma.application.update({
+      where: { id: applicationId },
+      data: { status: "WITHDRAWN" },
     });
   } else {
     return NextResponse.json({ error: "Invalid action" }, { status: 400 });
