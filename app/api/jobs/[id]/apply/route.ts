@@ -33,6 +33,26 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   // FCFS check: only apply if job uses FCFS mode
   if (job.fcfsMode === true) {
+    // FCFS timeout enforcement: if the lock has expired, auto-reopen the job
+    if (job.fcfsLockedAt != null && job.fcfsTimeoutMinutes != null) {
+      const lockAgeMinutes = (Date.now() - job.fcfsLockedAt.getTime()) / 60000;
+      if (lockAgeMinutes > job.fcfsTimeoutMinutes) {
+        // Lock expired — reopen job, reject FCFS app, clear lock
+        await prisma.$transaction([
+          prisma.application.updateMany({
+            where: { jobId: id, status: "FCFS_ACCEPTED" },
+            data: { status: "REJECTED" },
+          }),
+          prisma.job.update({
+            where: { id },
+            data: { status: "OPEN", fcfsLockedAt: null },
+          }),
+        ]);
+        // Refresh job state after reopening
+        job = await prisma.job.findUnique({ where: { id } });
+      }
+    }
+
     const otherApps = await prisma.application.findMany({
       where: { jobId: id, status: { in: ["PENDING", "FCFS_ACCEPTED"] } },
     });
@@ -49,10 +69,10 @@ export async function POST(req: NextRequest, { params }: Params) {
         },
       });
 
-      // Move job to IN_PROGRESS
+      // Move job to IN_PROGRESS and set FCFS lock timestamp
       await prisma.job.update({
         where: { id },
-        data: { status: "IN_PROGRESS" },
+        data: { status: "IN_PROGRESS", fcfsLockedAt: new Date() },
       });
 
       // Auto-create PRIVATE chat thread between poster and FCFS worker
@@ -124,7 +144,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       }),
       prisma.job.update({
         where: { id },
-        data: { status: "IN_PROGRESS" },
+        data: { status: "IN_PROGRESS", fcfsLockedAt: null },
       }),
       prisma.chatThread.create({
         data: { jobId: id, threadType: "PRIVATE" },

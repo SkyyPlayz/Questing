@@ -33,7 +33,7 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { title, description, category, location, payRate, payUnit, startDate, endDate, publish, fcfsMode, locationLat, locationLng } = body;
+  const { title, description, category, location, payRate, payUnit, startDate, endDate, publish, fcfsMode, fcfsTimeoutMinutes, locationLat, locationLng } = body;
 
   if (!title || !description || !category || !location || !payRate) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
@@ -52,8 +52,9 @@ export async function POST(req: NextRequest) {
       status: publish ? "OPEN" : "DRAFT",
       posterId: user.id,
       fcfsMode: fcfsMode !== undefined ? fcfsMode : true,
-      locationLat: locationLat ?? null,
-      locationLng: locationLng ?? null,
+      fcfsTimeoutMinutes: fcfsTimeoutMinutes ? parseInt(fcfsTimeoutMinutes) : 30,
+      locationLat: locationLat ? parseFloat(locationLat) : null,
+      locationLng: locationLng ? parseFloat(locationLng) : null,
     },
   });
 
