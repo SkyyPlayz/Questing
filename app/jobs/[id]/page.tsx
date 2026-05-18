@@ -21,6 +21,8 @@ export default async function JobDetailPage({ params }: Params) {
         include: { worker: { select: { id: true, name: true } } },
         orderBy: { createdAt: "desc" },
       },
+      payment: true,
+      platformFees: true,
     },
   });
 
@@ -39,6 +41,8 @@ export default async function JobDetailPage({ params }: Params) {
       userRole={user?.role}
       userApplication={userApplication ? JSON.parse(JSON.stringify(userApplication)) : null}
       isPoster={isPoster}
+      payment={job.payment ? JSON.parse(JSON.stringify(job.payment)) : null}
+      platformFees={job.platformFees ? JSON.parse(JSON.stringify(job.platformFees)) : []}
     />
   );
 }

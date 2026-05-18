@@ -56,31 +56,8 @@ export async function POST(req: NextRequest) {
       break;
     }
 
-    case "payment_intent.captured": {
+    case "payment_intent.succeeded": {
       // Safety net: if the API route didn't record the platform fee, capture it here
-      const pi = event.data.object as Stripe.PaymentIntent;
-      if (pi.metadata?.jobId) {
-        const existingFee = await prisma.platformFee.findUnique({ where: { jobId: pi.metadata.jobId } });
-        if (!existingFee) {
-          const feeConfig = await prisma.adminConfig.findUnique({ where: { key: "PLATFORM_FEE_PERCENT" } });
-          const feePercent = feeConfig ? parseFloat(feeConfig.value) || 0.10 : 0.10;
-          const platformFeeCents = Math.round(pi.amount * feePercent);
-          await prisma.platformFee.create({
-            data: {
-              jobId: pi.metadata.jobId,
-              amount: platformFeeCents,
-              type: "PLATFORM_SERVICE",
-              percent: feePercent,
-              status: "RELEASED",
-            },
-          });
-        }
-      }
-      break;
-    }
-
-    case "payment_intent.partially_captured": {
-      // Safety net for SPLIT dispute outcomes
       const pi = event.data.object as Stripe.PaymentIntent;
       if (pi.metadata?.jobId) {
         const existingFee = await prisma.platformFee.findUnique({ where: { jobId: pi.metadata.jobId } });

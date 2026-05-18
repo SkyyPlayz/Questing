@@ -20,6 +20,54 @@ async function getFeeConfig() {
   }, {} as Record<string, string>);
 }
 
+async function getFeeLedger() {
+  const [platformFees, bgCheckFees, platformTotal, bgCheckTotal] = await Promise.all([
+    prisma.platformFee.findMany({
+      include: { job: { select: { id: true, title: true, payRate: true, status: true } } },
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    prisma.backgroundCheckFee.findMany({
+      orderBy: { createdAt: "desc" },
+      take: 10,
+    }),
+    prisma.platformFee.aggregate({
+      where: { status: "RELEASED" },
+      _sum: { amount: true },
+    }),
+    prisma.backgroundCheckFee.aggregate({
+      where: { status: "PAID" },
+      _sum: { amount: true },
+    }),
+  ]);
+
+  return {
+    platformFees: platformFees.map(f => ({
+      id: f.id,
+      jobTitle: f.job.title,
+      percent: f.percent,
+      amount: f.amount,
+      status: f.status,
+      createdAt: f.createdAt,
+    })),
+    bgCheckFees: bgCheckFees.map(f => ({
+      id: f.id,
+      workerId: f.workerId,
+      amount: f.amount,
+      status: f.status,
+      createdAt: f.createdAt,
+    })),
+    totals: {
+      platformRevenueCents: platformTotal._sum.amount ?? 0,
+      platformRevenueDollar: ((platformTotal._sum.amount ?? 0) / 100).toFixed(2),
+      bgCheckRevenueCents: bgCheckTotal._sum.amount ?? 0,
+      bgCheckRevenueDollar: ((bgCheckTotal._sum.amount ?? 0) / 100).toFixed(2),
+      totalRevenueCents: ((platformTotal._sum.amount ?? 0) + (bgCheckTotal._sum.amount ?? 0)),
+      totalRevenueDollar: (((platformTotal._sum.amount ?? 0) + (bgCheckTotal._sum.amount ?? 0)) / 100).toFixed(2),
+    },
+  };
+}
+
 export default async function AdminPage() {
   const session = await auth();
   if (!session?.user) {
@@ -40,6 +88,7 @@ export default async function AdminPage() {
 
   const stats = await getAdminStats();
   const fees = await getFeeConfig();
+  const ledger = await getFeeLedger();
 
   const platformFeePct = fees["PLATFORM_FEE_PERCENT"]
     ? `${(parseFloat(fees["PLATFORM_FEE_PERCENT"]) * 100).toFixed(1)}%`
@@ -166,6 +215,109 @@ export default async function AdminPage() {
           </div>
         </div>
 
+        {/* Fee Ledger */}
+        <div className="bg-white rounded-lg border p-6 mb-8">
+          <h2 className="text-xl font-bold mb-4 text-gray-800">Fee Ledger</h2>
+
+          {/* Revenue Summary */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <div className="bg-blue-50 rounded p-3 border border-blue-200">
+              <p className="text-xs text-blue-600">Platform Revenue</p>
+              <p className="text-xl font-bold text-blue-700">${ledger.totals.platformRevenueDollar}</p>
+            </div>
+            <div className="bg-green-50 rounded p-3 border border-green-200">
+              <p className="text-xs text-green-600">BG Check Revenue</p>
+              <p className="text-xl font-bold text-green-700">${ledger.totals.bgCheckRevenueDollar}</p>
+            </div>
+            <div className="bg-purple-50 rounded p-3 border border-purple-200">
+              <p className="text-xs text-purple-600">Total Revenue</p>
+              <p className="text-xl font-bold text-purple-700">${ledger.totals.totalRevenueDollar}</p>
+            </div>
+            <div className="bg-gray-50 rounded p-3 border border-gray-200">
+              <p className="text-xs text-gray-600">Platform Fee Rate</p>
+              <p className="text-xl font-bold text-gray-700">{platformFeePct}</p>
+            </div>
+          </div>
+
+          {/* Recent Platform Fees */}
+          <div className="mb-4">
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Recent Platform Fees</h3>
+            {ledger.platformFees.length === 0 ? (
+              <p className="text-sm text-gray-400">No platform fees recorded yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-gray-500">
+                      <th className="text-left py-2 px-3">Job</th>
+                      <th className="text-left py-2 px-3">Rate</th>
+                      <th className="text-right py-2 px-3">Fee</th>
+                      <th className="text-left py-2 px-3">Status</th>
+                      <th className="text-left py-2 px-3">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ledger.platformFees.map((f: any) => (
+                      <tr key={f.id} className="border-b">
+                        <td className="py-2 px-3 font-medium">{f.jobTitle}</td>
+                        <td className="py-2 px-3">{(f.percent * 100).toFixed(1)}%</td>
+                        <td className="py-2 px-3 text-right">${(f.amount / 100).toFixed(2)}</td>
+                        <td className="py-2 px-3">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            f.status === "RELEASED" ? "bg-emerald-100 text-emerald-700" :
+                            f.status === "PENDING" ? "bg-yellow-100 text-yellow-700" :
+                            f.status === "VOIDED" ? "bg-gray-100 text-gray-700" :
+                            "bg-red-100 text-red-700"
+                          }`}>{f.status}</span>
+                        </td>
+                        <td className="py-2 px-3 text-gray-500">{new Date(f.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* Recent Background Check Fees */}
+          <div>
+            <h3 className="text-sm font-semibold text-gray-700 mb-2">Recent Background Check Fees</h3>
+            {ledger.bgCheckFees.length === 0 ? (
+              <p className="text-sm text-gray-400">No background check fees recorded yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-gray-500">
+                      <th className="text-left py-2 px-3">Worker ID</th>
+                      <th className="text-right py-2 px-3">Fee</th>
+                      <th className="text-left py-2 px-3">Status</th>
+                      <th className="text-left py-2 px-3">Date</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ledger.bgCheckFees.map((f: any) => (
+                      <tr key={f.id} className="border-b">
+                        <td className="py-2 px-3 font-mono text-xs">{f.workerId}</td>
+                        <td className="py-2 px-3 text-right">${(f.amount / 100).toFixed(2)}</td>
+                        <td className="py-2 px-3">
+                          <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${
+                            f.status === "PAID" ? "bg-emerald-100 text-emerald-700" :
+                            f.status === "PENDING" ? "bg-yellow-100 text-yellow-700" :
+                            f.status === "REFUNDED" ? "bg-red-100 text-red-700" :
+                            "bg-gray-100 text-gray-700"
+                          }`}>{f.status}</span>
+                        </td>
+                        <td className="py-2 px-3 text-gray-500">{new Date(f.createdAt).toLocaleDateString()}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+        </div>
+
         {/* Quick Links */}
         <div className="bg-white rounded-lg border p-6">
           <h2 className="text-xl font-bold mb-4 text-gray-800">Quick Links</h2>
@@ -178,6 +330,9 @@ export default async function AdminPage() {
             </Link>
             <Link href="/api/admin/incidents" className="text-blue-600 hover:text-blue-800 text-sm">
               Manage Incidents
+            </Link>
+            <Link href="/api/admin/fees" className="text-blue-600 hover:text-blue-800 text-sm">
+              Full Fee Ledger (API)
             </Link>
           </div>
         </div>

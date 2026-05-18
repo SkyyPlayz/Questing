@@ -37,7 +37,6 @@ export default function JobChat({
 
   // Poll threads every 10s
   useEffect(() => {
-    let interval: ReturnType<typeof setInterval>;
 
     async function fetchThreads() {
       try {
@@ -57,7 +56,7 @@ export default function JobChat({
     }
 
     fetchThreads();
-    interval = setInterval(fetchThreads, 10000);
+    const interval = setInterval(fetchThreads, 10000);
     return () => clearInterval(interval);
   }, [jobId, activeThreadId]);
 
@@ -233,7 +232,7 @@ export default function JobChat({
       )}
       {!isAllowedToSend && activeThreadId && (
         <p className="text-gray-400 text-sm mt-2">
-          You don't have permission to send messages in this thread.
+          You don&apos;t have permission to send messages in this thread.
         </p>
       )}
     </div>

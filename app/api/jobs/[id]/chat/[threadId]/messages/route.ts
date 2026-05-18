@@ -4,11 +4,11 @@ import { auth } from "@/app/lib/auth";
 
 export async function GET(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; threadId: string }> }
+  { params }: { params: Promise<{ threadId: string }> }
 ) {
   const session = await auth();
   const user = session?.user as { id?: string; role?: string } | undefined;
-  const { id, threadId } = await params;
+  const { threadId } = await params;
 
   const thread = await prisma.chatThread.findUnique({
     where: { id: threadId },
@@ -51,11 +51,11 @@ export async function GET(
 
 export async function POST(
   request: NextRequest,
-  { params }: { params: Promise<{ id: string; threadId: string }> }
+  { params }: { params: Promise<{ threadId: string }> }
 ) {
   const session = await auth();
   const user = session?.user as { id?: string; role?: string } | undefined;
-  const { id, threadId } = await params;
+  const { threadId } = await params;
 
   if (!user?.id) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

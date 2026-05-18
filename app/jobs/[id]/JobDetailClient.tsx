@@ -46,12 +46,16 @@ export default function JobDetailClient({
   userRole,
   userApplication,
   isPoster,
+  payment,
+  platformFees,
 }: {
   job: Job;
   userId?: string;
   userRole?: string;
   userApplication: Application | null;
   isPoster: boolean;
+  payment: { id: string; amount: number; status: string; stripePaymentIntentId: string | null } | null;
+  platformFees: { id: string; amount: number; percent: number; status: string; type: string }[];
 }) {
   const router = useRouter();
   const [message, setMessage] = useState("");
