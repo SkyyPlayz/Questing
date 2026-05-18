@@ -114,6 +114,15 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const totalCheckIns = existingCheckIns + 1;
 
+  let message = "";
+  if (verified) {
+    message = `Check-in verified — you are within ${distanceM?.toFixed(0)}m of the job location.`;
+  } else if (outOfRange) {
+    message = `⚠️ Check-in flagged — you are ${distanceM?.toFixed(0)}m from the job location (outside 500m range). An incident has been created for the poster to review.`;
+  } else {
+    message = "Check-in recorded — job has no GPS coordinates, so verification is not available.";
+  }
+
   return NextResponse.json({
     ...checkIn,
     verified,
@@ -123,6 +132,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     totalCheckIns,
     firstCheckInAt: existingCheckIns === 0 ? new Date() : null,
     outOfRangeIncident: outOfRangeIncident ? { id: outOfRangeIncident.id, description: outOfRangeIncident.description } : null,
+    message,
   }, { status: 201 });
 }
 

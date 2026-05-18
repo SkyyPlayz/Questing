@@ -105,7 +105,10 @@ export default async function ProfilePage() {
               });
               const data = await response.json();
               if (data.url) {
-                // In a real app we'd redirect; here we just show a message
+                return new Response(null, {
+                  status: 303,
+                  headers: { Location: data.url },
+                });
               }
             }}>
               <button

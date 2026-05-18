@@ -334,6 +334,9 @@ export default async function AdminPage() {
             <Link href="/api/admin/fees" className="text-blue-600 hover:text-blue-800 text-sm">
               Full Fee Ledger (API)
             </Link>
+            <Link href="/admin/affiliate-links" className="text-blue-600 hover:text-blue-800 text-sm">
+              Affiliate Links
+            </Link>
           </div>
         </div>
       </div>

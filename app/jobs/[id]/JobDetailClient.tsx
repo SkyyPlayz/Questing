@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import JobChat from "@/app/components/JobChat";
+import ToolRecommendations from "@/app/components/ToolRecommendations";
 
 type Application = {
   id: string;
@@ -33,11 +34,15 @@ type Job = {
   payRate: number;
   payUnit: string;
   status: string;
+  fcfsMode: boolean;
+  fcfsTimeoutMinutes: number | null;
   startDate: string | null;
   endDate: string | null;
   poster: { id: string; name: string | null };
   applications: Application[];
   jobCheckIns: JobCheckIn[];
+  payment: { id: string; amount: number; status: string; stripePaymentIntentId: string | null } | null;
+  platformFees: { id: string; amount: number; percent: number; status: string; type: string }[];
 };
 
 export default function JobDetailClient({
@@ -218,9 +223,63 @@ export default function JobDetailClient({
           </span>
           {job.startDate && <span>Start: {new Date(job.startDate).toLocaleDateString()}</span>}
           {job.endDate && <span>End: {new Date(job.endDate).toLocaleDateString()}</span>}
+          {job.fcfsMode && (
+            <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded-full text-xs font-medium">
+              FCFS Mode
+              {job.fcfsTimeoutMinutes && ` (timeout: ${job.fcfsTimeoutMinutes}min)`}
+            </span>
+          )}
+          {!job.fcfsMode && (
+            <span className="bg-blue-100 text-blue-700 px-2 py-1 rounded-full text-xs font-medium">
+              Poster Review Mode
+            </span>
+          )}
         </div>
 
         <p className="text-gray-700 whitespace-pre-wrap mb-6">{job.description}</p>
+
+        {/* Tool Recommendations */}
+        <ToolRecommendations jobId={job.id} category={job.category} />
+
+        {/* Payment & Fee breakdown */}
+        {job.payment && (
+          <div className="border-t pt-4 mt-4">
+            <h2 className="font-semibold mb-3">💰 Payment & Fees</h2>
+            <div className="space-y-2 text-sm">
+              <div className="flex justify-between">
+                <span className="text-gray-500">Job Payment:</span>
+                <span className="font-medium">${(job.payment.amount / 100).toFixed(2)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-gray-500">Status:</span>
+                <span className={`font-medium ${
+                  job.payment.status === "HELD" ? "text-yellow-600" :
+                  job.payment.status === "RELEASED" ? "text-green-600" :
+                  job.payment.status === "VOIDED" ? "text-gray-400" :
+                  "text-gray-600"
+                }`}>{job.payment.status}</span>
+              </div>
+              {job.platformFees.length > 0 && (
+                <>
+                  <div className="border-t pt-2 mt-2">
+                    {job.platformFees.map((fee) => (
+                      <div key={fee.id} className="flex justify-between text-sm">
+                        <span className="text-gray-500">Platform Fee ({(fee.percent * 100).toFixed(0)}%):</span>
+                        <span className="font-medium">${(fee.amount / 100).toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-between font-bold text-gray-800 border-t pt-2 mt-2">
+                    <span>Net to Worker:</span>
+                    <span className="text-green-700">
+                      ${((job.payment.amount - job.platformFees.reduce((s, f) => s + f.amount, 0)) / 100).toFixed(2)}
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* Poster controls */}
         {isPoster && (

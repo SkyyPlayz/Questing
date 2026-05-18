@@ -184,6 +184,7 @@ model Job {
   chatThreads  ChatThread[]
   fcfsMode     Boolean            @default(true)
   fcfsTimeoutMinutes Int?         @default(30)
+  fcfsLockedAt DateTime?
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 }
@@ -377,4 +378,40 @@ model ChatMessage {
 
   @@index([threadId])
   @@index([threadId, createdAt])
+}
+
+enum Retailer {
+  AMAZON
+  HOME_DEPOT
+  LOWES
+  OTHER
+}
+
+model AffiliateLink {
+  id          String    @id @default(cuid())
+  jobCategory String
+  toolName    String
+  description String
+  affiliateUrl String
+  retailer    Retailer  @default(AMAZON)
+  imageUrl    String?
+  clickCount  Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  clicks      AffiliateLinkClick[]
+
+  @@index([jobCategory, isActive])
+}
+
+model AffiliateLinkClick {
+  id             String   @id @default(cuid())
+  affiliateLinkId String
+  userId         String?
+  ipAddress      String?
+  clickedAt      DateTime @default(now())
+  affiliateLink  AffiliateLink @relation(fields: [affiliateLinkId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateLinkId, clickedAt])
 }
