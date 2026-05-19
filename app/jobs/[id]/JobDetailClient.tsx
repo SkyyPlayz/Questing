@@ -77,6 +77,9 @@ export default function JobDetailClient({
   const [threadCreating, setThreadCreating] = useState(false);
   const [threadError, setThreadError] = useState("");
   const [threadSuccess, setThreadSuccess] = useState("");
+  const [sosLoading, setSosLoading] = useState(false);
+  const [sosResult, setSosResult] = useState<{ incidentId: string; emergencyContact: string | null; adminContact: string } | null>(null);
+  const [sosError, setSosError] = useState("");
 
   const statusColors: Record<string, string> = {
     DRAFT: "bg-gray-100 text-gray-700",
@@ -199,6 +202,28 @@ export default function JobDetailClient({
         message: data.message,
       });
       router.refresh();
+    }
+  }
+
+  async function handleSOS() {
+    setSosLoading(true);
+    setSosError("");
+    setSosResult(null);
+    const res = await fetch(`/api/jobs/${job.id}/sos`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+    });
+    setSosLoading(false);
+    if (!res.ok) {
+      const data = await res.json();
+      setSosError(data.error || "SOS failed");
+    } else {
+      const data = await res.json();
+      setSosResult({
+        incidentId: data.incidentId,
+        emergencyContact: data.emergencyContact,
+        adminContact: data.adminContact,
+      });
     }
   }
 
@@ -451,6 +476,34 @@ export default function JobDetailClient({
               className="bg-indigo-600 text-white px-5 py-2 rounded font-medium hover:bg-indigo-700 disabled:opacity-50 text-sm"
             >
               {checkInLoading ? "Checking location..." : "Check In Now"}
+            </button>
+          </div>
+        )}
+
+        {/* SOS Emergency button — for accepted workers on IN_PROGRESS jobs */}
+        {userRole === "WORKER" && job.status === "IN_PROGRESS" && !isPoster && userApplication &&
+          (userApplication.status === "FCFS_ACCEPTED" || userApplication.status === "ACCEPTED") && (
+          <div className="border-t pt-4 mt-4">
+            <h2 className="font-semibold mb-3 text-red-700">🚨 Emergency SOS</h2>
+            <p className="text-sm text-gray-600 mb-3">
+              If you're in danger, press SOS to log a high-severity incident and notify your emergency contact and admin.
+            </p>
+            {sosResult && (
+              <div className="bg-red-50 border border-red-200 rounded p-3 mb-3 text-sm text-red-800">
+                <p className="font-semibold">🚨 Emergency Incident Logged</p>
+                <p>Incident ID: {sosResult.incidentId}</p>
+                {sosResult.emergencyContact && <p>Emergency contact notified: {sosResult.emergencyContact}</p>}
+                <p>Admin contact: {sosResult.adminContact}</p>
+                <p className="mt-2 text-red-600 font-medium">Job flagged for admin review.</p>
+              </div>
+            )}
+            {sosError && <p className="text-red-600 text-sm mb-3">{sosError}</p>}
+            <button
+              onClick={handleSOS}
+              disabled={sosLoading}
+              className="bg-red-700 text-white px-6 py-2 rounded font-bold hover:bg-red-800 disabled:opacity-50 text-sm uppercase tracking-wide"
+            >
+              {sosLoading ? "Triggering SOS..." : "🚨 SOS Emergency"}
             </button>
           </div>
         )}

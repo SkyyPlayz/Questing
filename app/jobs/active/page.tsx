@@ -23,6 +23,11 @@ export default async function ActiveJobsPage() {
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">My Active Jobs</h1>
+      <p className="text-sm text-gray-500 mb-4">
+        <Link href="/settings/emergency" className="text-blue-600 hover:underline">
+          Set your emergency contact
+        </Link>
+      </p>
       {applications.length === 0 ? (
         <div className="text-center py-16 text-gray-500">
           <p>No active jobs yet.</p>
