@@ -14,6 +14,9 @@ export default async function Nav() {
         <Link href="/jobs" className="text-gray-600 hover:text-blue-600">
           Jobs
         </Link>
+        <Link href="/map" className="text-gray-600 hover:text-blue-600">
+          🗺️ Map
+        </Link>
         {user ? (
           <>
             {user.role === "POSTER" && (
