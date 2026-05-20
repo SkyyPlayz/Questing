@@ -33,10 +33,10 @@ export async function GET(_req: NextRequest, { params }: Params) {
     include: {
       poster: { select: { id: true, name: true, email: true } },
       applications: {
-        include: { worker: { select: { id: true, name: true, email: true } } },
+        include: { worker: { select: { id: true, name: true, email: true, userLevel: true } } },
       },
       jobCheckIns: {
-        include: { worker: { select: { id: true, name: true } } },
+        include: { worker: { select: { id: true, name: true, userLevel: true } } },
         orderBy: { timestamp: "desc" },
       },
       incidents: {

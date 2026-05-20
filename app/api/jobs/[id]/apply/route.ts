@@ -16,7 +16,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   const { id } = await params;
-  const job = await prisma.job.findUnique({ where: { id } });
+  let job = await prisma.job.findUnique({ where: { id } });
   if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
   if (job.status !== "OPEN") {
     return NextResponse.json({ error: "Job is not open for applications" }, { status: 400 });

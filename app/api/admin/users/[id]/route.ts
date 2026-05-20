@@ -21,6 +21,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
       ratingsReceived: { include: { fromUser: { select: { id: true, name: true } } } },
       incidents: true,
       adminNotes: { orderBy: { createdAt: "desc" } },
+      userLevel: true,
     },
     omit: { passwordHash: true },
   });
@@ -73,7 +74,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   const updated = await prisma.user.findUnique({
     where: { id },
-    include: { workerProfile: true, riskScore: true },
+    include: { workerProfile: true, riskScore: true, userLevel: true },
     omit: { passwordHash: true },
   });
 

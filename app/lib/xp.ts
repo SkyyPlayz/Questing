@@ -6,6 +6,7 @@ export const XP_REWARDS: Record<XPAction, number> = {
   STAGE_COMPLETED: 25,
   QUEST_COMPLETED: 100,
   RATING_RECEIVED_5_STAR: 50,
+  USER_CREATED: 50,
 };
 
 const LEVEL_THRESHOLDS = [

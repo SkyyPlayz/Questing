@@ -10,19 +10,34 @@ export default async function ActiveJobsPage() {
   if (!user?.id) redirect("/login");
   if (user.role !== "WORKER") redirect("/jobs");
 
-  const applications = await prisma.application.findMany({
-    where: { workerId: user.id, status: "ACCEPTED" },
-    include: {
-      job: {
-        include: { poster: { select: { id: true, name: true } } },
+  const [applications, userLevel] = await Promise.all([
+    prisma.application.findMany({
+      where: { workerId: user.id, status: "ACCEPTED" },
+      include: {
+        job: {
+          include: { poster: { select: { id: true, name: true } } },
+        },
       },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
+      orderBy: { updatedAt: "desc" },
+    }),
+    prisma.userLevel.findUnique({ where: { userId: user.id } }),
+  ]);
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
-      <h1 className="text-2xl font-bold mb-6">My Active Jobs</h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl font-bold">My Active Jobs</h1>
+        {userLevel && (
+          <div className="flex items-center gap-2">
+            <span className="inline-block px-3 py-1 rounded-full text-xs font-bold bg-yellow-100 text-yellow-700 border border-yellow-200">
+              ⭐ {userLevel.level}
+            </span>
+            <span className="text-xs text-gray-500">
+              {userLevel.totalXP} XP · {userLevel.xpToNext ?? 0} to next
+            </span>
+          </div>
+        )}
+      </div>
       <p className="text-sm text-gray-500 mb-4">
         <Link href="/settings/emergency" className="text-blue-600 hover:underline">
           Set your emergency contact
@@ -57,6 +72,11 @@ export default async function ActiveJobsPage() {
                   <p className="font-bold text-green-700 mt-1">
                     ${app.job.payRate}/{app.job.payUnit}
                   </p>
+                  {userLevel && (
+                    <p className="text-xs text-gray-400 mt-1">
+                      Your level: {userLevel.level} ({userLevel.totalXP} XP)
+                    </p>
+                  )}
                 </div>
               </div>
             </Link>
