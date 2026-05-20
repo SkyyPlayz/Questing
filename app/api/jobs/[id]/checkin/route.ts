@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { awardXP } from "@/app/lib/xp";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -114,9 +115,14 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const totalCheckIns = existingCheckIns + 1;
 
+  let xpResult = null;
+  if (verified) {
+    xpResult = await awardXP(user.id, "STAGE_COMPLETED", id);
+  }
+
   let message = "";
   if (verified) {
-    message = `Check-in verified — you are within ${distanceM?.toFixed(0)}m of the job location.`;
+    message = `Check-in verified — you are within ${distanceM?.toFixed(0)}m of the job location. +${xpResult?.xpAwarded} XP`;
   } else if (outOfRange) {
     message = `⚠️ Check-in flagged — you are ${distanceM?.toFixed(0)}m from the job location (outside 500m range). An incident has been created for the poster to review.`;
   } else {
@@ -132,6 +138,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     totalCheckIns,
     firstCheckInAt: existingCheckIns === 0 ? new Date() : null,
     outOfRangeIncident: outOfRangeIncident ? { id: outOfRangeIncident.id, description: outOfRangeIncident.description } : null,
+    xp: xpResult,
     message,
   }, { status: 201 });
 }

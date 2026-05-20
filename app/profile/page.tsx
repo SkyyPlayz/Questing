@@ -21,11 +21,12 @@ export default async function ProfilePage() {
     );
   }
 
-  const [workerProfile, bgCheckFee, competencyScore, riskScore] = await Promise.all([
+  const [workerProfile, bgCheckFee, competencyScore, riskScore, userLevel] = await Promise.all([
     prisma.workerProfile.findUnique({ where: { userId: user.id } }),
     prisma.backgroundCheckFee.findFirst({ where: { workerId: user.id } }),
     prisma.competencyScore.findUnique({ where: { userId: user.id } }),
     prisma.riskScore.findUnique({ where: { userId: user.id } }),
+    prisma.userLevel.findUnique({ where: { userId: user.id } }),
   ]);
 
   const bgCheckStatus = bgCheckFee?.status ?? "NOT_STARTED";
@@ -54,11 +55,56 @@ export default async function ProfilePage() {
     <div className="min-h-screen bg-gray-50">
       <div className="max-w-2xl mx-auto px-4 py-8">
         <div className="flex items-center justify-between mb-8">
-          <h1 className="text-3xl font-bold text-blue-700">Your Profile</h1>
+          <div>
+            <h1 className="text-3xl font-bold text-blue-700">Your Profile</h1>
+            {userLevel && (
+              <div className="flex items-center gap-2 mt-1">
+                <span className="bg-yellow-400 text-yellow-900 text-xs font-bold px-2 py-0.5 rounded-full">
+                  {userLevel.level}
+                </span>
+                <span className="text-sm text-gray-500">{userLevel.totalXP} XP</span>
+              </div>
+            )}
+          </div>
           <Link href="/" className="text-gray-500 hover:text-blue-600 text-sm">
             Back to site
           </Link>
         </div>
+
+        {/* XP Progress Bar */}
+        {userLevel && (
+          <div className="bg-white rounded-lg border p-4 mb-6">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm font-bold text-gray-700">⚔️ {userLevel.level}</span>
+              {userLevel.nextLevel && (
+                <span className="text-xs text-gray-500">
+                  {userLevel.xpToNext} XP to {userLevel.nextLevel}
+                </span>
+              )}
+              {!userLevel.nextLevel && (
+                <span className="text-xs text-yellow-600 font-bold">Max Level!</span>
+              )}
+            </div>
+            {userLevel.nextLevel && (() => {
+              const THRESHOLDS: Record<string, [number, number]> = {
+                Apprentice: [0, 500],
+                Journeyman: [500, 1500],
+                Skilled: [1500, 3500],
+                Expert: [3500, 7500],
+              };
+              const [min, max] = THRESHOLDS[userLevel.level] ?? [0, 500];
+              const pct = Math.min(100, Math.round(((userLevel.totalXP - min) / (max - min)) * 100));
+              return (
+                <div className="w-full bg-gray-200 rounded-full h-3">
+                  <div
+                    className="bg-yellow-400 h-3 rounded-full transition-all"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              );
+            })()}
+          </div>
+        )}
 
         {/* Worker Info */}
         <div className="bg-white rounded-lg border p-6 mb-6">

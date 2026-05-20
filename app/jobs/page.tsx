@@ -86,6 +86,9 @@ export default async function JobsPage({
                   <p className="font-bold text-green-700">
                     ${job.payRate}/{job.payUnit}
                   </p>
+                  <p className="text-xs text-yellow-600 font-semibold mt-1">
+                    ⚔️ +100 XP
+                  </p>
                   <p className="text-xs text-gray-400 mt-1">
                     by {job.poster.name}
                   </p>

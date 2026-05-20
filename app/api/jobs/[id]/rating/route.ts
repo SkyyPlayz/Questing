@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { awardXP } from "@/app/lib/xp";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -69,6 +70,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   });
 
   await recomputeCompetency(toUserId);
+
+  if (score === 5) {
+    await awardXP(toUserId, "RATING_RECEIVED_5_STAR", jobId);
+  }
 
   return NextResponse.json(rating, { status: 201 });
 }

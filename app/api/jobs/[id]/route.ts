@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
+import { awardXP } from "@/app/lib/xp";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -91,6 +92,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     });
   }
 
+  // Award QUEST_COMPLETED XP to worker when job is marked COMPLETED (no-payment path)
+  if (status === "COMPLETED" && job.status !== "COMPLETED" && !updated.payment?.stripePaymentIntentId) {
+    const acceptedApp = await prisma.application.findFirst({
+      where: { jobId: id, status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } },
+    });
+    if (acceptedApp) {
+      await awardXP(acceptedApp.workerId, "QUEST_COMPLETED", id);
+    }
+  }
+
   if (status && status !== job.status && updated.payment?.stripePaymentIntentId) {
     const pi = updated.payment.stripePaymentIntentId;
     if (status === "COMPLETED" && updated.payment.status === "HELD") {
@@ -101,6 +112,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
       await stripe.paymentIntents.capture(pi);
       await prisma.payment.update({ where: { id: updated.payment.id }, data: { status: "RELEASED" } });
+
+      // Award QUEST_COMPLETED XP to the accepted worker
+      const acceptedApp = await prisma.application.findFirst({
+        where: { jobId: id, status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } },
+      });
+      if (acceptedApp) {
+        await awardXP(acceptedApp.workerId, "QUEST_COMPLETED", id);
+      }
 
       // Record the platform fee
       await prisma.platformFee.create({

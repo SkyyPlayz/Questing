@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { awardXP } from "@/app/lib/xp";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -80,6 +81,8 @@ export async function POST(req: NextRequest, { params }: Params) {
         data: { jobId: id, threadType: "PRIVATE" },
       });
 
+      await awardXP(user.id, "JOB_ACCEPTED", id);
+
       return NextResponse.json({
         ...application,
         jobStatus: "IN_PROGRESS",
@@ -150,6 +153,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         data: { jobId: id, threadType: "PRIVATE" },
       }),
     ]);
+    await awardXP(application.workerId, "JOB_ACCEPTED", id);
   } else if (action === "reject") {
     // Only allowed for PENDING apps when job is still OPEN
     if (application.status !== "PENDING" || job.status !== "OPEN") {

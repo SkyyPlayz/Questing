@@ -80,6 +80,7 @@ export default function JobDetailClient({
   const [sosLoading, setSosLoading] = useState(false);
   const [sosResult, setSosResult] = useState<{ incidentId: string; emergencyContact: string | null; adminContact: string } | null>(null);
   const [sosError, setSosError] = useState("");
+  const [questComplete, setQuestComplete] = useState(false);
 
   const statusColors: Record<string, string> = {
     DRAFT: "bg-gray-100 text-gray-700",
@@ -134,7 +135,10 @@ export default function JobDetailClient({
       body: JSON.stringify({ status: newStatus }),
     });
     setStatusLoading(false);
-    if (res.ok) router.refresh();
+    if (res.ok) {
+      if (newStatus === "COMPLETED") setQuestComplete(true);
+      else router.refresh();
+    }
   }
 
   async function handleThreadCreate(threadType: "PUBLIC_QA" | "PRIVATE", workerId?: string) {
@@ -227,6 +231,28 @@ export default function JobDetailClient({
     }
   }
 
+  if (questComplete) {
+    return (
+      <div className="fixed inset-0 bg-black bg-opacity-80 flex items-center justify-center z-50">
+        <div className="bg-white rounded-2xl p-10 max-w-md w-full mx-4 text-center shadow-2xl">
+          <div className="text-6xl mb-4">🏆</div>
+          <h1 className="text-3xl font-bold text-purple-700 mb-2">Quest Complete!</h1>
+          <p className="text-gray-600 mb-4">The job has been marked as completed.</p>
+          <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-6">
+            <p className="text-yellow-700 font-bold text-xl">+100 XP</p>
+            <p className="text-yellow-600 text-sm">Quest Completed reward</p>
+          </div>
+          <button
+            onClick={() => { setQuestComplete(false); router.refresh(); }}
+            className="bg-purple-600 text-white px-8 py-3 rounded-lg font-bold hover:bg-purple-700 w-full"
+          >
+            Continue
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
       <div className="bg-white border rounded-lg p-6">
@@ -261,7 +287,15 @@ export default function JobDetailClient({
           )}
         </div>
 
-        <p className="text-gray-700 whitespace-pre-wrap mb-6">{job.description}</p>
+        <p className="text-gray-700 whitespace-pre-wrap mb-4">{job.description}</p>
+
+        {job.status === "OPEN" && (
+          <div className="flex items-center gap-2 mb-6">
+            <span className="bg-yellow-100 text-yellow-700 text-xs font-bold px-3 py-1 rounded-full">
+              ⚔️ Complete this quest: +100 XP
+            </span>
+          </div>
+        )}
 
         {/* Tool Recommendations */}
         <ToolRecommendations jobId={job.id} category={job.category} />
