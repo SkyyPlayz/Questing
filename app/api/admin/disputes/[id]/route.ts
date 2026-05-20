@@ -114,23 +114,29 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   // Notify raiser
   if (raiser) {
-    await sendEmail(emailDisputeResolved({
-      raiserName: raiser.name ?? "a user",
-      jobTitle: dispute.job.title,
-      recipientName: raiser.name ?? "you",
-      outcome: outcomeLabel,
-    }));
+    await sendEmail({
+      to: { email: raiser.email, name: raiser.name ?? undefined },
+      ...emailDisputeResolved({
+        raiserName: raiser.name ?? "a user",
+        jobTitle: dispute.job.title,
+        recipientName: raiser.name ?? "you",
+        outcome: outcomeLabel,
+      }),
+    });
   }
 
   // Notify the other party
   const otherParty = acceptedApp?.worker || poster;
   if (otherParty) {
-    await sendEmail(emailDisputeResolved({
-      raiserName: raiser?.name ?? "a user",
-      jobTitle: dispute.job.title,
-      recipientName: otherParty.name ?? "the other party",
-      outcome: outcomeLabel,
-    }));
+    await sendEmail({
+      to: { email: otherParty.email, name: otherParty.name ?? undefined },
+      ...emailDisputeResolved({
+        raiserName: raiser?.name ?? "a user",
+        jobTitle: dispute.job.title,
+        recipientName: otherParty.name ?? "the other party",
+        outcome: outcomeLabel,
+      }),
+    });
   }
 
   return NextResponse.json(updated);

@@ -305,6 +305,7 @@ enum FeeType {
 enum AdminConfigKey {
   PLATFORM_FEE_PERCENT
   BACKGROUND_CHECK_FEE_CENTS
+  ADMIN_EMAIL
 }
 
 model PlatformFee {

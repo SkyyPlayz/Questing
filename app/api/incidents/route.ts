@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
   });
 
   // Notify the other party and admin about the incident
-  const job = await prisma.job.findUnique({
+  const jobFull = await prisma.job.findUnique({
     where: { id: jobId },
     include: {
       applications: { where: { status: "ACCEPTED" }, include: { worker: { select: { id: true, name: true, email: true } } } },
@@ -38,11 +38,11 @@ export async function POST(req: NextRequest) {
     select: { name: true, email: true },
   });
 
-  let recipient: { name: string; email: string } | null = null;
-  if (job?.posterId === user.id && job.applications[0]) {
-    recipient = job.applications[0].worker;
-  } else if (job?.applications[0]?.workerId === user.id) {
-    recipient = job.poster;
+  let recipient: { name: string | null; email: string } | null = null;
+  if (jobFull?.posterId === user.id && jobFull.applications[0]) {
+    recipient = jobFull.applications[0].worker;
+  } else if (jobFull?.applications[0]?.workerId === user.id) {
+    recipient = jobFull.poster;
   }
 
   if (recipient?.email && reporter?.name) {
@@ -50,7 +50,7 @@ export async function POST(req: NextRequest) {
       to: { email: recipient.email, name: recipient.name ?? undefined },
       ...emailIncidentReported({
         reporterName: reporter.name,
-        jobTitle: job?.title ?? "unknown job",
+        jobTitle: jobFull?.title ?? "unknown job",
         severity,
         recipientName: recipient.name ?? "Recipient",
       }),
@@ -59,12 +59,12 @@ export async function POST(req: NextRequest) {
 
   // Also notify admin
   const adminConfig = await prisma.adminConfig.findUnique({ where: { key: "ADMIN_EMAIL" } });
-  if (adminConfig?.value && job && reporter) {
+  if (adminConfig?.value && jobFull && reporter) {
     await sendEmail({
       to: { email: adminConfig.value },
-      subject: `Admin alert: ${severity} incident on "${job.title}"`,
+      subject: `Admin alert: ${severity} incident on "${jobFull.title}"`,
       html: BASE.replace("{title}", "Safety Incident Alert").replace("{body}",
-        `Hi Admin,\n\n${reporter.name ?? "a user"} has reported a ${severity} severity incident on job "${job.title}".\n\nDescription: ${description}\n\nPlease review and take appropriate action.`
+        `Hi Admin,\n\n${reporter.name ?? "a user"} has reported a ${severity} severity incident on job "${jobFull.title}".\n\nDescription: ${description}\n\nPlease review and take appropriate action.`
       ),
     });
   }

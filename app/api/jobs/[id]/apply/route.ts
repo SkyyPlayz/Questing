@@ -88,11 +88,14 @@ export async function POST(req: NextRequest, { params }: Params) {
       const worker = await prisma.user.findUnique({ where: { id: user.id }, select: { name: true, email: true } });
       const poster = await prisma.user.findUnique({ where: { id: job.posterId }, select: { name: true, email: true } });
       if (worker && poster) {
-        await sendEmail(emailApplicationAccepted({
-          workerName: worker.name ?? "there",
-          jobTitle: job.title,
-          posterName: poster.name ?? "the poster",
-        }));
+        await sendEmail({
+          to: { email: worker.email, name: worker.name ?? undefined },
+          ...emailApplicationAccepted({
+            workerName: worker.name ?? "there",
+            jobTitle: job.title,
+            posterName: poster.name ?? "the poster",
+          }),
+        });
       }
 
       return NextResponse.json({
@@ -109,12 +112,15 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     // Send application submitted email to poster
     const poster = await prisma.user.findUnique({ where: { id: job.posterId }, select: { name: true, email: true } });
-    if (poster) {
-      await sendEmail(emailApplicationSubmitted({
-        workerName: user.name ?? "a worker",
-        jobTitle: job.title,
-        posterName: poster.name ?? "the poster",
-      }));
+    if (poster && job) {
+      await sendEmail({
+        to: { email: poster.email, name: poster.name ?? undefined },
+        ...emailApplicationSubmitted({
+          workerName: (session.user as { name?: string }).name ?? "a worker",
+          jobTitle: job.title,
+          posterName: poster.name ?? "the poster",
+        }),
+      });
     }
 
     return NextResponse.json(application, { status: 201 });
@@ -127,12 +133,15 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   // Send application submitted email to poster
   const poster = await prisma.user.findUnique({ where: { id: job.posterId }, select: { name: true, email: true } });
-  if (poster) {
-    await sendEmail(emailApplicationSubmitted({
-      workerName: user.name ?? "a worker",
-      jobTitle: job.title,
-      posterName: poster.name ?? "the poster",
-    }));
+  if (poster && job) {
+    await sendEmail({
+      to: { email: poster.email, name: poster.name ?? undefined },
+      ...emailApplicationSubmitted({
+        workerName: (session.user as { name?: string }).name ?? "a worker",
+        jobTitle: job.title,
+        posterName: poster.name ?? "the poster",
+      }),
+    });
   }
 
   return NextResponse.json(application, { status: 201 });
@@ -190,12 +199,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // Send acceptance email to worker
     const worker = await prisma.user.findUnique({ where: { id: application.workerId }, select: { name: true, email: true } });
     const poster = await prisma.user.findUnique({ where: { id: job.posterId }, select: { name: true } });
-    if (worker && poster) {
-      await sendEmail(emailApplicationAccepted({
-        workerName: worker.name ?? "there",
-        jobTitle: job.title,
-        posterName: poster.name ?? "the poster",
-      }));
+    if (worker && poster && job) {
+      await sendEmail({
+        to: { email: worker.email, name: worker.name ?? undefined },
+        ...emailApplicationAccepted({
+          workerName: worker.name ?? "there",
+          jobTitle: job.title,
+          posterName: poster.name ?? "the poster",
+        }),
+      });
     }
 
     // Send rejection emails to other workers
@@ -204,11 +216,14 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       include: { worker: { select: { name: true, email: true } } },
     });
     for (const app of rejectedApps) {
-      await sendEmail(emailApplicationRejected({
-        workerName: app.worker.name ?? "there",
-        jobTitle: job.title,
-        posterName: poster.name ?? "the poster",
-      }));
+      await sendEmail({
+        to: { email: app.worker.email, name: app.worker.name ?? undefined },
+        ...emailApplicationRejected({
+          workerName: app.worker.name ?? "there",
+          jobTitle: job.title,
+          posterName: poster.name ?? "the poster",
+        }),
+      });
     }
   } else if (action === "reject") {
     // Only allowed for PENDING apps when job is still OPEN
@@ -223,12 +238,15 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     // Send rejection email to worker
     const worker = await prisma.user.findUnique({ where: { id: application.workerId }, select: { name: true, email: true } });
     const poster = await prisma.user.findUnique({ where: { id: job.posterId }, select: { name: true } });
-    if (worker && poster) {
-      await sendEmail(emailApplicationRejected({
-        workerName: worker.name ?? "there",
-        jobTitle: job.title,
-        posterName: poster.name ?? "the poster",
-      }));
+    if (worker && poster && job) {
+      await sendEmail({
+        to: { email: worker.email, name: worker.name ?? undefined },
+        ...emailApplicationRejected({
+          workerName: worker.name ?? "there",
+          jobTitle: job.title,
+          posterName: poster.name ?? "the poster",
+        }),
+      });
     }
   } else if (action === "withdraw") {
     // Worker can withdraw their pending application
