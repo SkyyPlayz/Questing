@@ -7,6 +7,23 @@ import { awardXP } from "@/app/lib/xp";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
+async function updateReliabilityScore(workerId: string) {
+  const [accepted, completed] = await Promise.all([
+    prisma.application.count({
+      where: { workerId, status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } },
+    }),
+    prisma.application.count({
+      where: { workerId, status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] }, job: { status: "COMPLETED" } },
+    }),
+  ]);
+  const reliabilityPct = accepted > 0 ? completed / accepted : 0;
+  await prisma.competencyScore.upsert({
+    where: { userId: workerId },
+    update: { jobsCompleted: completed, reliabilityPct, updatedAt: new Date() },
+    create: { userId: workerId, jobsCompleted: completed, reliabilityPct, updatedAt: new Date() },
+  });
+}
+
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
@@ -99,6 +116,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     });
     if (acceptedApp) {
       await awardXP(acceptedApp.workerId, "QUEST_COMPLETED", id);
+      await updateReliabilityScore(acceptedApp.workerId);
     }
   }
 
@@ -119,6 +137,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       });
       if (acceptedApp) {
         await awardXP(acceptedApp.workerId, "QUEST_COMPLETED", id);
+        await updateReliabilityScore(acceptedApp.workerId);
       }
 
       // Record the platform fee
