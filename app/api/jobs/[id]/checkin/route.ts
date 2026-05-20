@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { awardXP } from "@/app/lib/xp";
+import { sendEmail, emailIncidentReported, BASE } from "@/app/lib/email";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -99,6 +100,39 @@ export async function POST(req: NextRequest, { params }: Params) {
         riskLevel: "MEDIUM",
       },
     });
+
+    // Notify poster about out-of-range incident
+    const poster = await prisma.user.findUnique({
+      where: { id: job.posterId },
+      select: { name: true, email: true },
+    });
+    const worker = await prisma.user.findUnique({
+      where: { id: user.id },
+      select: { name: true, email: true },
+    });
+    if (poster?.email && worker?.name) {
+      await sendEmail({
+        to: { email: poster.email, name: poster.name ?? undefined },
+        ...emailIncidentReported({
+          reporterName: worker.name,
+          jobTitle: job.title,
+          severity: "LOW",
+          recipientName: poster.name ?? "Poster",
+        }),
+      });
+    }
+
+    // Also notify admin
+    const adminConfig = await prisma.adminConfig.findUnique({ where: { key: "ADMIN_EMAIL" } });
+    if (adminConfig?.value && worker) {
+      await sendEmail({
+        to: { email: adminConfig.value },
+        subject: `Admin alert: Worker out-of-range on "${job.title}"`,
+        html: BASE.replace("{title}", "Out-of-Range Alert").replace("{body}",
+          `Hi Admin,\n\n${worker.name ?? "a worker"} checked in ${distanceM?.toFixed(0)}m from the job location for "${job.title}" — outside the 500m range.\n\nAn incident has been created for review.`
+        ),
+      });
+    }
   }
 
   const checkIn = await prisma.jobCheckIn.create({

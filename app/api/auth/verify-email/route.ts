@@ -15,11 +15,21 @@ export async function POST(req: NextRequest) {
   const token = crypto.randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24 hours
 
-  await prisma.verificationToken.upsert({
-    where: { identifier_token: { identifier: `verify:${email}`, token: email } },
-    update: { token, expires },
-    create: { identifier: `verify:${email}`, token, expires },
+  // Find existing token by identifier only (not by token value)
+  const existing = await prisma.verificationToken.findUnique({
+    where: { identifier: `verify:${email}` },
   });
+
+  if (existing) {
+    await prisma.verificationToken.update({
+      where: { identifier: `verify:${email}` },
+      data: { token, expires },
+    });
+  } else {
+    await prisma.verificationToken.create({
+      data: { identifier: `verify:${email}`, token, expires },
+    });
+  }
 
   const verifyUrl = `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
 

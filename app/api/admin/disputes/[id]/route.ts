@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { DisputeOutcome } from "@prisma/client";
+import { sendEmail, emailDisputeResolved } from "@/app/lib/email";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -95,6 +96,42 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       data: { status: outcome === "DISMISSED" ? "CANCELLED" : "COMPLETED" },
     }),
   ]);
+
+  // Notify both parties about dispute resolution
+  const raiser = await prisma.user.findUnique({ where: { id: dispute.raisedById }, select: { name: true, email: true } });
+  const poster = await prisma.user.findUnique({ where: { id: dispute.job.posterId }, select: { name: true, email: true } });
+  const acceptedApp = await prisma.application.findFirst({
+    where: { jobId: dispute.jobId, status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } },
+    include: { worker: { select: { name: true, email: true } } },
+  });
+
+  const outcomeLabel = {
+    WORKER_FAVOR: "Worker Favor (payment released to worker)",
+    POSTER_FAVOR: "Poster Favor (payment released to poster)",
+    SPLIT: "Split (payment shared)",
+    DISMISSED: "Dismissed (payment voided)",
+  }[outcome] ?? outcome;
+
+  // Notify raiser
+  if (raiser) {
+    await sendEmail(emailDisputeResolved({
+      raiserName: raiser.name ?? "a user",
+      jobTitle: dispute.job.title,
+      recipientName: raiser.name ?? "you",
+      outcome: outcomeLabel,
+    }));
+  }
+
+  // Notify the other party
+  const otherParty = acceptedApp?.worker || poster;
+  if (otherParty) {
+    await sendEmail(emailDisputeResolved({
+      raiserName: raiser?.name ?? "a user",
+      jobTitle: dispute.job.title,
+      recipientName: otherParty.name ?? "the other party",
+      outcome: outcomeLabel,
+    }));
+  }
 
   return NextResponse.json(updated);
 }

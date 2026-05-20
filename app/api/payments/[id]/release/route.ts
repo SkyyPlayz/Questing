@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { sendEmail, emailPaymentReleased, emailPaymentRefunded, BASE } from "@/app/lib/email";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -70,6 +71,35 @@ export async function POST(req: NextRequest, { params }: Params) {
       data: { status: "RELEASED" },
     });
 
+    // Notify worker and poster about payment release
+    const acceptedApp = await prisma.application.findFirst({
+      where: { jobId: payment.jobId, status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } },
+      include: { worker: { select: { id: true, name: true, email: true } } },
+    });
+    const poster = await prisma.user.findUnique({
+      where: { id: payment.job.posterId },
+      select: { name: true, email: true },
+    });
+    if (acceptedApp?.worker) {
+      await sendEmail({
+        to: { email: acceptedApp.worker.email, name: acceptedApp.worker.name ?? undefined },
+        ...emailPaymentReleased({
+          workerName: acceptedApp.worker.name ?? "Worker",
+          jobTitle: payment.job.title,
+          amount: payment.amount,
+        }),
+      });
+    }
+    if (poster?.email) {
+      await sendEmail({
+        to: { email: poster.email, name: poster.name ?? undefined },
+        subject: `Payment released for "${payment.job.title}"`,
+        html: BASE.replace("{title}", "Payment Released").replace("{body}",
+          `Hi ${poster.name ?? "there"},\n\nPayment for "${payment.job.title}" has been released.\n\nAmount: $${(payment.amount / 100).toFixed(2)}\n\nThe quest is now fully settled.`
+        ),
+      });
+    }
+
     return NextResponse.json({
       payment: updated,
       platformFee: { amount: platformFeeCents, percent: feePercent, alreadyExists: !!existingFee },
@@ -86,6 +116,36 @@ export async function POST(req: NextRequest, { params }: Params) {
       where: { id },
       data: { status: "REFUNDED" },
     });
+
+    // Notify worker and poster about refund
+    const acceptedApp = await prisma.application.findFirst({
+      where: { jobId: payment.jobId, status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } },
+      include: { worker: { select: { id: true, name: true, email: true } } },
+    });
+    const poster = await prisma.user.findUnique({
+      where: { id: payment.job.posterId },
+      select: { name: true, email: true },
+    });
+    if (acceptedApp?.worker) {
+      await sendEmail({
+        to: { email: acceptedApp.worker.email, name: acceptedApp.worker.name ?? undefined },
+        ...emailPaymentRefunded({
+          workerName: acceptedApp.worker.name ?? "Worker",
+          jobTitle: payment.job.title,
+          amount: payment.amount,
+        }),
+      });
+    }
+    if (poster?.email) {
+      await sendEmail({
+        to: { email: poster.email, name: poster.name ?? undefined },
+        subject: `Payment refunded for "${payment.job.title}"`,
+        html: BASE.replace("{title}", "Payment Refunded").replace("{body}",
+          `Hi ${poster.name ?? "there"},\n\nPayment for "${payment.job.title}" has been refunded.\n\nAmount: $${(payment.amount / 100).toFixed(2)}\n\nThe quest is now fully settled.`
+        ),
+      });
+    }
+
     return NextResponse.json(updated);
   }
 

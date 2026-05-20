@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { auth } from "@/app/lib/auth";
+import { sendEmail, emailNewChatMessage, BASE } from "@/app/lib/email";
 
 export async function GET(
   request: NextRequest,
@@ -70,7 +71,7 @@ export async function POST(
 
   const thread = await prisma.chatThread.findUnique({
     where: { id: threadId },
-    include: { job: { select: { posterId: true } } },
+    include: { job: { select: { posterId: true, title: true } } },
   });
 
   if (!thread) {
@@ -99,7 +100,7 @@ export async function POST(
       senderId: user.id,
       content: content.trim(),
     },
-    include: { sender: { select: { id: true, name: true } } },
+    include: { sender: { select: { id: true, name: true, email: true } } },
   });
 
   // Update thread lastMessageAt
@@ -107,6 +108,28 @@ export async function POST(
     where: { id: threadId },
     data: { lastMessageAt: message.createdAt },
   });
+
+  // Send chat notification to the other participant (skip if public QA)
+  if (thread.threadType === "PRIVATE") {
+    const sender = message.sender;
+    const acceptedApps = await prisma.application.findMany({
+      where: { jobId: thread.jobId, status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } },
+      select: { workerId: true },
+    });
+    const recipient = user.id === thread.job.posterId && acceptedApps[0]
+      ? await prisma.user.findUnique({ where: { id: acceptedApps[0].workerId }, select: { name: true, email: true } })
+      : await prisma.user.findUnique({ where: { id: thread.job.posterId }, select: { name: true, email: true } });
+    if (recipient) {
+      await sendEmail({
+        to: { email: recipient.email, name: recipient.name ?? undefined },
+        ...emailNewChatMessage({
+          senderName: sender.name ?? "a user",
+          jobTitle: thread.job.title ?? "the job",
+          recipientName: recipient.name ?? "the recipient",
+        }),
+      });
+    }
+  }
 
   return NextResponse.json({ message }, { status: 201 });
 }

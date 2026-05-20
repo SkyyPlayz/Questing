@@ -4,6 +4,7 @@ import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
 import { awardXP } from "@/app/lib/xp";
+import { sendEmail, emailJobCompleted, emailPaymentReleased, emailDisputeOpened, BASE } from "@/app/lib/email";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -113,10 +114,36 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (status === "COMPLETED" && job.status !== "COMPLETED" && !updated.payment?.stripePaymentIntentId) {
     const acceptedApp = await prisma.application.findFirst({
       where: { jobId: id, status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } },
+      include: { worker: { select: { id: true, name: true, email: true } } },
     });
     if (acceptedApp) {
       await awardXP(acceptedApp.workerId, "QUEST_COMPLETED", id);
       await updateReliabilityScore(acceptedApp.workerId);
+
+      const poster = await prisma.user.findUnique({
+        where: { id: job.posterId },
+        select: { name: true, email: true },
+      });
+
+      // Notify worker
+      await sendEmail({
+        to: { email: acceptedApp.worker.email, name: acceptedApp.worker.name ?? undefined },
+        ...emailJobCompleted({
+          workerName: acceptedApp.worker.name ?? "Worker",
+          jobTitle: updated.title,
+          payRate: updated.payRate ?? 0,
+          payUnit: updated.payUnit ?? "flat",
+        }),
+      });
+
+      // Notify poster
+      await sendEmail({
+        to: { email: poster?.email ?? "", name: poster?.name ?? undefined },
+        subject: `Quest completed! "${updated.title}"`,
+        html: BASE.replace("{title}", "Quest Completed").replace("{body}",
+          `Hi ${poster?.name ?? "there"},\n\n"${updated.title}" has been completed by ${acceptedApp.worker.name ?? "the worker"}.\n\nBoth parties can now rate each other. Check your dashboard for details.`
+        ),
+      });
     }
   }
 
@@ -134,10 +161,33 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       // Award QUEST_COMPLETED XP to the accepted worker
       const acceptedApp = await prisma.application.findFirst({
         where: { jobId: id, status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } },
+        include: { worker: { select: { id: true, name: true, email: true } } },
       });
       if (acceptedApp) {
         await awardXP(acceptedApp.workerId, "QUEST_COMPLETED", id);
         await updateReliabilityScore(acceptedApp.workerId);
+
+        // Notify worker about payment release
+        await sendEmail({
+          to: { email: acceptedApp.worker.email, name: acceptedApp.worker.name ?? undefined },
+          ...emailPaymentReleased({
+            workerName: acceptedApp.worker.name ?? "Worker",
+            jobTitle: updated.title,
+            amount: updated.payment.amount,
+          }),
+        });
+
+        const poster = await prisma.user.findUnique({
+          where: { id: job.posterId },
+          select: { name: true, email: true },
+        });
+        await sendEmail({
+          to: { email: poster?.email ?? "", name: poster?.name ?? undefined },
+          subject: `Payment released for "${updated.title}"`,
+          html: BASE.replace("{title}", "Payment Released").replace("{body}",
+            `Hi ${poster?.name ?? "there"},\n\nPayment for "${updated.title}" has been released to ${acceptedApp.worker.name ?? "the worker"}.\n\nAmount: $${(updated.payment.amount / 100).toFixed(2)}\n\nThe quest is now fully settled.`
+          ),
+        });
       }
 
       // Record the platform fee
