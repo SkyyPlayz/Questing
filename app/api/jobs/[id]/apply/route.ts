@@ -87,7 +87,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       // Send acceptance email to FCFS worker
       const worker = await prisma.user.findUnique({ where: { id: user.id }, select: { name: true, email: true } });
       const poster = await prisma.user.findUnique({ where: { id: job.posterId }, select: { name: true, email: true } });
-      if (worker && poster) {
+      if (worker && poster && job) {
         await sendEmail({
           to: { email: worker.email, name: worker.name ?? undefined },
           ...emailApplicationAccepted({
