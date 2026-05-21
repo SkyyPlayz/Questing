@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   if (existing) {
     await prisma.verificationToken.update({
-      where: { id: existing.id },
+      where: { identifier_token: { identifier: `verify:${email}`, token: existing.token } },
       data: { token, expires },
     });
   } else {
