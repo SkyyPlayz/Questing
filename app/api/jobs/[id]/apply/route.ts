@@ -86,14 +86,14 @@ export async function POST(req: NextRequest, { params }: Params) {
 
       // Send acceptance email to FCFS worker
       const worker = await prisma.user.findUnique({ where: { id: user.id }, select: { name: true, email: true } });
-      const poster = await prisma.user.findUnique({ where: { id: job.posterId }, select: { name: true, email: true } });
+      const poster = await prisma.user.findUnique({ where: { id: job!.posterId }, select: { name: true, email: true } });
       if (worker && poster && job) {
         await sendEmail({
           to: { email: worker.email, name: worker.name ?? undefined },
           ...emailApplicationAccepted({
             workerName: worker.name ?? "there",
             jobTitle: job.title,
-            posterName: poster.name ?? "the poster",
+            posterName: poster?.name ?? "the poster",
           }),
         });
       }
@@ -111,14 +111,14 @@ export async function POST(req: NextRequest, { params }: Params) {
     });
 
     // Send application submitted email to poster
-    const poster = await prisma.user.findUnique({ where: { id: job.posterId }, select: { name: true, email: true } });
-    if (poster && job) {
+      const poster = await prisma.user.findUnique({ where: { id: job!.posterId }, select: { name: true, email: true } });
+    if (poster && job && job.posterId) {
       await sendEmail({
         to: { email: poster.email, name: poster.name ?? undefined },
         ...emailApplicationSubmitted({
           workerName: (session.user as { name?: string }).name ?? "a worker",
           jobTitle: job.title,
-          posterName: poster.name ?? "the poster",
+          posterName: poster?.name ?? "the poster",
         }),
       });
     }
@@ -132,7 +132,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   });
 
   // Send application submitted email to poster
-  const poster = await prisma.user.findUnique({ where: { id: job.posterId }, select: { name: true, email: true } });
+      const poster = await prisma.user.findUnique({ where: { id: job!.posterId }, select: { name: true, email: true } });
   if (poster && job) {
     await sendEmail({
       to: { email: poster.email, name: poster.name ?? undefined },
@@ -205,7 +205,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...emailApplicationAccepted({
           workerName: worker.name ?? "there",
           jobTitle: job.title,
-          posterName: poster.name ?? "the poster",
+          posterName: poster?.name ?? "the poster",
         }),
       });
     }
@@ -221,7 +221,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...emailApplicationRejected({
           workerName: app.worker.name ?? "there",
           jobTitle: job.title,
-          posterName: poster.name ?? "the poster",
+          posterName: poster?.name ?? "the poster",
         }),
       });
     }
@@ -244,7 +244,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         ...emailApplicationRejected({
           workerName: worker.name ?? "there",
           jobTitle: job.title,
-          posterName: poster.name ?? "the poster",
+          posterName: poster?.name ?? "the poster",
         }),
       });
     }

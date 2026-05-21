@@ -1,6 +1,7 @@
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import Link from "next/link";
+import { redirect } from "next/navigation";
 
 export default async function ProfilePage() {
   const session = await auth();
@@ -151,10 +152,7 @@ export default async function ProfilePage() {
               });
               const data = await response.json();
               if (data.url) {
-                return new Response(null, {
-                  status: 303,
-                  headers: { Location: data.url },
-                });
+                redirect(data.url);
               }
             }}>
               <button
