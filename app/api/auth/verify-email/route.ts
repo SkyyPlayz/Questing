@@ -16,13 +16,13 @@ export async function POST(req: NextRequest) {
   const expires = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24 hours
 
   // Find existing token by identifier only (not by token value)
-  const existing = await prisma.verificationToken.findUnique({
+  const existing = await prisma.verificationToken.findFirst({
     where: { identifier: `verify:${email}` },
   });
 
   if (existing) {
     await prisma.verificationToken.update({
-      where: { identifier: `verify:${email}` },
+      where: { id: existing.id },
       data: { token, expires },
     });
   } else {

@@ -105,12 +105,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     include: { worker: { select: { name: true, email: true } } },
   });
 
-  const outcomeLabel = {
-    WORKER_FAVOR: "Worker Favor (payment released to worker)",
-    POSTER_FAVOR: "Poster Favor (payment released to poster)",
-    SPLIT: "Split (payment shared)",
-    DISMISSED: "Dismissed (payment voided)",
-  }[outcome] ?? outcome;
+  const outcomeLabel: string = outcome === "WORKER_FAVOR" ? "Worker Favor (payment released to worker)" : outcome === "POSTER_FAVOR" ? "Poster Favor (payment released to poster)" : outcome === "SPLIT" ? "Split (payment shared)" : outcome === "DISMISSED" ? "Dismissed (payment voided)" : outcome;
 
   // Notify raiser
   if (raiser) {

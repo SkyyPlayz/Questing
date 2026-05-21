@@ -20,7 +20,6 @@ export async function GET(request: Request) {
     // Summary stats
     const summary = await prisma.affiliateLinkClick.aggregate({
       _count: { id: true },
-      _sum: { id: true }, // placeholder, not useful
     });
 
     // Per-link breakdown
@@ -44,7 +43,7 @@ export async function GET(request: Request) {
     });
 
     // If filtering by specific link, get detailed clicks
-    let detailedClicks = [];
+    let detailedClicks: Awaited<ReturnType<typeof prisma.affiliateLinkClick.findMany>> = [];
     if (affiliateLinkId) {
       detailedClicks = await prisma.affiliateLinkClick.findMany({
         where: { affiliateLinkId },
