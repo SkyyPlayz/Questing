@@ -57,6 +57,27 @@ enum IncidentStatus {
   DISMISSED
 }
 
+enum GitHubIntakeRunStatus {
+  DRY_RUN
+  COMPLETED
+  FAILED
+}
+
+enum GitHubIntakeCandidateStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  DEFERRED
+  FILED
+}
+
+enum GitHubIntakeSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
 enum DisputeStatus {
   OPEN
   RESOLVED
@@ -458,4 +479,53 @@ model UserLevel {
   user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([level])
+}
+
+model GitHubIntakeRun {
+  id             String                @id @default(cuid())
+  status         GitHubIntakeRunStatus @default(DRY_RUN)
+  source         String                @default("manual")
+  dryRun         Boolean               @default(true)
+  summary        String?
+  error          String?
+  startedAt      DateTime              @default(now())
+  completedAt    DateTime?
+  requestedById  String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  candidates     GitHubIntakeCandidate[]
+
+  @@index([createdAt])
+  @@index([status])
+}
+
+model GitHubIntakeCandidate {
+  id                String                       @id @default(cuid())
+  runId             String
+  run               GitHubIntakeRun              @relation(fields: [runId], references: [id], onDelete: Cascade)
+  title             String
+  description       String
+  evidence          String
+  evidenceUrl       String?
+  category          String                       @default("general")
+  severity          GitHubIntakeSeverity         @default(MEDIUM)
+  status            GitHubIntakeCandidateStatus  @default(PENDING_REVIEW)
+  labels            String[]
+  fingerprint       String
+  securitySensitive Boolean                      @default(false)
+  duplicateOfId     String?
+  duplicateOf       GitHubIntakeCandidate?       @relation("CandidateDuplicate", fields: [duplicateOfId], references: [id])
+  duplicates        GitHubIntakeCandidate[]      @relation("CandidateDuplicate")
+  githubIssueUrl    String?
+  githubIssueNumber Int?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  reviewNote        String?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+
+  @@unique([fingerprint])
+  @@index([runId])
+  @@index([status])
+  @@index([securitySensitive])
 }
