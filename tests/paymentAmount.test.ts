@@ -39,3 +39,25 @@ test("time-based checkout rejects missing dates instead of silently charging one
     /startDate and endDate are required/,
   );
 });
+
+test("hour checkout rejects zero elapsed duration instead of charging a minimum hour", () => {
+  assert.throws(
+    () =>
+      calculateCheckoutAmountCents({
+        payRate: 20,
+        payUnit: "hour",
+        startDate: new Date("2026-01-01T12:00:00.000Z"),
+        endDate: new Date("2026-01-01T12:00:00.000Z"),
+      }),
+    /endDate must be after startDate for hourly jobs/,
+  );
+});
+
+test("checkout amount rounds to cents and rejects totals that round to zero", () => {
+  assert.equal(calculateCheckoutAmountCents({ payRate: 10.235, payUnit: "job", startDate: null, endDate: null }), 1024);
+
+  assert.throws(
+    () => calculateCheckoutAmountCents({ payRate: 0.001, payUnit: "job", startDate: null, endDate: null }),
+    /checkout amount must be at least one cent/,
+  );
+});

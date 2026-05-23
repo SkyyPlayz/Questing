@@ -56,12 +56,20 @@ export function calculateCheckoutAmountCents(job: CheckoutJobPricing): number {
     }
     case "hour": {
       const { start, end } = requireDateRange(job);
-      quantity = Math.max(1, Math.ceil((end.getTime() - start.getTime()) / MS_PER_HOUR));
+      if (end.getTime() <= start.getTime()) {
+        throw new Error("endDate must be after startDate for hourly jobs");
+      }
+      quantity = Math.ceil((end.getTime() - start.getTime()) / MS_PER_HOUR);
       break;
     }
     default:
       throw new Error(`Unsupported payUnit: ${job.payUnit}`);
   }
 
-  return Math.round(job.payRate * quantity * 100);
+  const amountCents = Math.round(job.payRate * quantity * 100);
+  if (!Number.isSafeInteger(amountCents) || amountCents < 1) {
+    throw new Error("checkout amount must be at least one cent");
+  }
+
+  return amountCents;
 }
