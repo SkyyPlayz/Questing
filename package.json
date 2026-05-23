@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "test": "rm -rf /tmp/questing-payment-tests && tsc tests/paymentAmount.test.ts app/lib/paymentAmount.ts --module commonjs --target es2022 --outDir /tmp/questing-payment-tests --esModuleInterop --moduleResolution node --skipLibCheck && node --test /tmp/questing-payment-tests/tests/paymentAmount.test.js"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
