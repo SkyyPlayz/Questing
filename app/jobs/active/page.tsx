@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { auth } from "@/app/lib/auth";
+import { buildActiveWorkerApplicationsQuery } from "@/app/lib/activeJobsQuery";
 import { prisma } from "@/app/lib/prisma";
 
 export default async function ActiveJobsPage() {
@@ -10,15 +11,9 @@ export default async function ActiveJobsPage() {
   if (!user?.id) redirect("/login");
   if (user.role !== "WORKER") redirect("/jobs");
 
-  const applications = await prisma.application.findMany({
-    where: { workerId: user.id, status: "ACCEPTED" },
-    include: {
-      job: {
-        include: { poster: { select: { id: true, name: true } } },
-      },
-    },
-    orderBy: { updatedAt: "desc" },
-  });
+  const applications = await prisma.application.findMany(
+    buildActiveWorkerApplicationsQuery(user.id),
+  );
 
   return (
     <div className="max-w-3xl mx-auto px-4 py-8">
