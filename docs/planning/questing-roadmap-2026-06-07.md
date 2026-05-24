@@ -82,15 +82,15 @@ Shared rule:
 Create one GitHub Project after owner approval.
 
 Project name:
-Questing Roadmap: Beta to Full Release
+Questing Roadmap: Beta to Full release
 
 Suggested project fields:
-- Stage: Beta, Version 1, Version 2, Full Release
+- Stage: Beta, Version 1, Version 2, Full release
 - Phase Group: Stabilization, Security, Product, Platform, Operations, Growth
 - Workstream: Backend, Frontend, Security, QA, Docs, DevOps, Product
 - Priority: P0, P1, P2, P3
 - Owner: Backend/code-quality company, Peter/Sky/product company, Shared
-- Status: Backlog, Ready, In progress, In review, Blocked, Done
+- Status: Backlog, Ready, In Progress, In Review, Blocked, Done
 - Target milestone: 2026-06-07 initial plan, Beta, v1, v2, Full release
 - Dependency: Parent issue / blocked-by issue
 
