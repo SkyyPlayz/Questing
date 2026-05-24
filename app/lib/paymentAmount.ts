@@ -41,6 +41,10 @@ function requireDateRange(job: CheckoutJobPricing): { start: Date; end: Date } {
   return { start, end };
 }
 
+function toUtcDayTimestamp(date: Date): number {
+  return Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate());
+}
+
 export function calculateCheckoutAmountCents(job: CheckoutJobPricing): number {
   requirePositivePayRate(job.payRate);
 
@@ -51,7 +55,7 @@ export function calculateCheckoutAmountCents(job: CheckoutJobPricing): number {
       break;
     case "day": {
       const { start, end } = requireDateRange(job);
-      quantity = Math.floor((end.getTime() - start.getTime()) / MS_PER_DAY) + 1;
+      quantity = Math.floor((toUtcDayTimestamp(end) - toUtcDayTimestamp(start)) / MS_PER_DAY) + 1;
       break;
     }
     case "hour": {

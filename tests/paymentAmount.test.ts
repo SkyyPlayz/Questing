@@ -14,8 +14,8 @@ test("day checkout charges every inclusive calendar day", () => {
     calculateCheckoutAmountCents({
       payRate: 75,
       payUnit: "day",
-      startDate: new Date("2026-01-01T00:00:00.000Z"),
-      endDate: new Date("2026-01-03T00:00:00.000Z"),
+      startDate: new Date("2026-01-01T18:30:00.000Z"),
+      endDate: new Date("2026-01-03T02:15:00.000Z"),
     }),
     22500,
   );
