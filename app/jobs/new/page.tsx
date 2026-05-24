@@ -15,6 +15,10 @@ export default function NewJobPage() {
     payUnit: "hour",
     startDate: "",
     endDate: "",
+    fcfsMode: true,
+    fcfsTimeoutMinutes: 30,
+    locationLat: "",
+    locationLng: "",
   });
   const [publish, setPublish] = useState(false);
   const [error, setError] = useState("");
@@ -136,6 +140,59 @@ export default function NewJobPage() {
               value={form.endDate}
               onChange={(e) => update("endDate", e.target.value)}
               className="w-full border rounded px-3 py-2 text-sm"
+            />
+          </div>
+        </div>
+
+        {/* FCFS settings */}
+        <div className="grid grid-cols-2 gap-4">
+          <div className="flex items-center gap-2">
+            <input
+              type="checkbox"
+              id="fcfsMode"
+              checked={form.fcfsMode}
+              onChange={(e) => update("fcfsMode", e.target.checked ? "true" : "false")}
+              className="rounded"
+            />
+            <label htmlFor="fcfsMode" className="text-sm">
+              First-come-first-served (auto-accept first worker)
+            </label>
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">FCFS Timeout (minutes)</label>
+            <input
+              type="number"
+              min="1"
+              value={form.fcfsTimeoutMinutes}
+              onChange={(e) => update("fcfsTimeoutMinutes", e.target.value)}
+              className="w-full border rounded px-3 py-2 text-sm"
+              placeholder="30"
+            />
+          </div>
+        </div>
+
+        {/* GPS coordinates */}
+        <div className="grid grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Location Latitude</label>
+            <input
+              type="number"
+              step="0.000001"
+              value={form.locationLat}
+              onChange={(e) => update("locationLat", e.target.value)}
+              className="w-full border rounded px-3 py-2 text-sm"
+              placeholder="e.g. 42.8751"
+            />
+          </div>
+          <div>
+            <label className="block text-sm font-medium mb-1">Location Longitude</label>
+            <input
+              type="number"
+              step="0.000001"
+              value={form.locationLng}
+              onChange={(e) => update("locationLng", e.target.value)}
+              className="w-full border rounded px-3 py-2 text-sm"
+              placeholder="e.g. -108.9825"
             />
           </div>
         </div>

@@ -40,6 +40,7 @@ enum PaymentStatus {
   PENDING
   HELD
   RELEASED
+  PAID
   VOIDED
   REFUNDED
 }
@@ -54,6 +55,27 @@ enum IncidentStatus {
   OPEN
   RESOLVED
   DISMISSED
+}
+
+enum GitHubIntakeRunStatus {
+  DRY_RUN
+  COMPLETED
+  FAILED
+}
+
+enum GitHubIntakeCandidateStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  DEFERRED
+  FILED
+}
+
+enum GitHubIntakeSeverity {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
 }
 
 enum DisputeStatus {
@@ -96,6 +118,11 @@ model User {
   riskScore       RiskScore?
   incidents       SafetyIncident[] @relation("IncidentReporter")
   adminNotes      AdminNote[]
+  backgroundCheckFees BackgroundCheckFee[]
+  jobCheckIns     JobCheckIn[]       @relation("WorkerCheckIns")
+  sentMessages    ChatMessage[]      @relation("MessageSender")
+  xpTransactions  XPTransaction[]    @relation("UserXpTransactions")
+  userLevel       UserLevel?
 }
 
 model WorkerProfile {
@@ -106,6 +133,9 @@ model WorkerProfile {
   hourlyRate            Float?
   idVerified            Boolean  @default(false)
   backgroundCheckStatus String   @default("PENDING")
+  emergencyContact      String?
+  emergencyContactPhone String?
+  onboardingComplete    Boolean  @default(false)
   user                  User     @relation(fields: [userId], references: [id], onDelete: Cascade)
   updatedAt             DateTime @updatedAt
 }
@@ -161,6 +191,8 @@ model Job {
   description  String
   category     String
   location     String
+  locationLat  Float?
+  locationLng  Float?
   payRate      Float
   payUnit      String         @default("hour")
   startDate    DateTime?
@@ -173,6 +205,13 @@ model Job {
   ratings      Rating[]
   disputes     Dispute[]
   incidents    SafetyIncident[]
+  platformFees PlatformFee[]
+  jobCheckIns  JobCheckIn[]         @relation("JobCheckIns")
+  chatThreads  ChatThread[]
+  fcfsMode     Boolean            @default(true)
+  fcfsTimeoutMinutes Int?         @default(30)
+  fcfsLockedAt DateTime?
+  xpTransactions XPTransaction[]   @relation("JobXpTransactions")
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 }
@@ -184,6 +223,7 @@ model Application {
   message   String?
   status    ApplicationStatus @default(PENDING)
   acceptedAt DateTime?
+  firstCheckInAt DateTime?
   job       Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
   worker    User              @relation(fields: [workerId], references: [id])
   checkIns  JobCheckIn[]
@@ -286,6 +326,7 @@ enum FeeType {
 enum AdminConfigKey {
   PLATFORM_FEE_PERCENT
   BACKGROUND_CHECK_FEE_CENTS
+  ADMIN_EMAIL
 }
 
 model PlatformFee {
@@ -329,9 +370,162 @@ model JobCheckIn {
   distanceM  Float?
   application Application @relation(fields: [applicationId], references: [id])
   applicationId String
-  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  worker     User     @relation(fields: [workerId], references: [id])
+  job        Job      @relation("JobCheckIns", fields: [jobId], references: [id], onDelete: Cascade)
+  worker     User     @relation("WorkerCheckIns", fields: [workerId], references: [id])
   createdAt  DateTime @default(now())
 
   @@index([jobId, workerId])
+}
+
+enum ChatThreadType {
+  PUBLIC_QA
+  PRIVATE
+}
+
+model ChatThread {
+  id           String         @id @default(cuid())
+  jobId        String
+  threadType   ChatThreadType @default(PUBLIC_QA)
+  lastMessageAt DateTime?
+  job          Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  messages     ChatMessage[]
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+
+  @@index([jobId, threadType])
+}
+
+model ChatMessage {
+  id        String   @id @default(cuid())
+  threadId  String
+  senderId  String
+  content   String
+  thread    ChatThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
+  sender    User       @relation("MessageSender", fields: [senderId], references: [id])
+  createdAt DateTime   @default(now())
+
+  @@index([threadId])
+  @@index([threadId, createdAt])
+}
+
+enum XPAction {
+  JOB_ACCEPTED
+  STAGE_COMPLETED
+  QUEST_COMPLETED
+  RATING_RECEIVED_5_STAR
+  USER_CREATED
+}
+
+enum Retailer {
+  AMAZON
+  HOME_DEPOT
+  LOWES
+  OTHER
+}
+
+model AffiliateLink {
+  id          String    @id @default(cuid())
+  jobCategory String
+  toolName    String
+  description String
+  affiliateUrl String
+  retailer    Retailer  @default(AMAZON)
+  imageUrl    String?
+  clickCount  Int       @default(0)
+  isActive    Boolean   @default(true)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  clicks      AffiliateLinkClick[]
+
+  @@index([jobCategory, isActive])
+}
+
+model AffiliateLinkClick {
+  id             String   @id @default(cuid())
+  affiliateLinkId String
+  userId         String?
+  ipAddress      String?
+  clickedAt      DateTime @default(now())
+  affiliateLink  AffiliateLink @relation(fields: [affiliateLinkId], references: [id], onDelete: Cascade)
+
+  @@index([affiliateLinkId, clickedAt])
+}
+
+model XPTransaction {
+  id         String   @id @default(cuid())
+  userId     String
+  jobId      String?
+  action     XPAction
+  xpAwarded  Int
+  createdAt  DateTime @default(now())
+
+  user  User   @relation("UserXpTransactions", fields: [userId], references: [id], onDelete: Cascade)
+  job   Job?   @relation("JobXpTransactions", fields: [jobId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+  @@index([action])
+}
+
+model UserLevel {
+  id         String   @id @default(cuid())
+  userId     String   @unique
+  totalXP    Int      @default(0)
+  level      String   @default("Apprentice")
+  nextLevel  String?
+  xpToNext   Int?
+  updatedAt  DateTime @updatedAt
+
+  user  User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([level])
+}
+
+model GitHubIntakeRun {
+  id             String                @id @default(cuid())
+  status         GitHubIntakeRunStatus @default(DRY_RUN)
+  source         String                @default("manual")
+  dryRun         Boolean               @default(true)
+  summary        String?
+  error          String?
+  startedAt      DateTime              @default(now())
+  completedAt    DateTime?
+  requestedById  String?
+  createdAt      DateTime              @default(now())
+  updatedAt      DateTime              @updatedAt
+  candidates     GitHubIntakeCandidate[]
+
+  @@index([createdAt])
+  @@index([status])
+}
+
+model GitHubIntakeCandidate {
+  id                String                       @id @default(cuid())
+  runId             String
+  run               GitHubIntakeRun              @relation(fields: [runId], references: [id], onDelete: Cascade)
+  title             String
+  description       String
+  evidence          String
+  evidenceUrl       String?
+  category          String                       @default("general")
+  severity          GitHubIntakeSeverity         @default(MEDIUM)
+  status            GitHubIntakeCandidateStatus  @default(PENDING_REVIEW)
+  labels            String[]
+  fingerprint       String
+  securitySensitive Boolean                      @default(false)
+  duplicateOfId     String?
+  duplicateOf       GitHubIntakeCandidate?       @relation("CandidateDuplicate", fields: [duplicateOfId], references: [id])
+  duplicates        GitHubIntakeCandidate[]      @relation("CandidateDuplicate")
+  githubIssueUrl    String?
+  githubIssueNumber Int?
+  reviewedById      String?
+  reviewedAt        DateTime?
+  reviewNote        String?
+  createdAt         DateTime                     @default(now())
+  updatedAt         DateTime                     @updatedAt
+
+  @@unique([fingerprint])
+  @@index([runId])
+  @@index([status])
+  @@index([securitySensitive])
 }

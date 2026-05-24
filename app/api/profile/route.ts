@@ -14,6 +14,7 @@ export async function GET() {
       posterProfile: true,
       competencyScore: true,
       riskScore: true,
+      userLevel: true,
     },
     omit: { passwordHash: true },
   });

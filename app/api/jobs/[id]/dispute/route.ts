@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { sendEmail, emailDisputeOpened } from "@/app/lib/email";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -12,7 +13,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   const { id: jobId } = await params;
   const job = await prisma.job.findUnique({
     where: { id: jobId },
-    include: { applications: { where: { status: "ACCEPTED" } } },
+    include: {
+      applications: { where: { status: "ACCEPTED" }, include: { worker: { select: { id: true, name: true, email: true } } } },
+      poster: { select: { id: true, name: true, email: true } },
+    },
   });
 
   if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
@@ -32,6 +36,35 @@ export async function POST(req: NextRequest, { params }: Params) {
     prisma.dispute.create({ data: { jobId, raisedById: user.id } }),
     prisma.job.update({ where: { id: jobId }, data: { status: "DISPUTED" } }),
   ]);
+
+  // Notify the other party (recipient) about the dispute
+  const acceptedApp = job.applications.find((a) => a.status === "ACCEPTED");
+  const raiser = await prisma.user.findUnique({
+    where: { id: user.id },
+    select: { name: true, email: true },
+  });
+  let recipient: { name: string | null; email: string } | null = null;
+  if (job.posterId === user.id && acceptedApp) {
+    recipient = await prisma.user.findUnique({
+      where: { id: acceptedApp.workerId },
+      select: { name: true, email: true },
+    });
+  } else if (acceptedApp && acceptedApp.workerId === user.id) {
+    recipient = await prisma.user.findUnique({
+      where: { id: job.posterId },
+      select: { name: true, email: true },
+    });
+  }
+  if (recipient?.email && raiser?.name) {
+    await sendEmail({
+      to: { email: recipient.email, name: recipient.name ?? undefined },
+      ...emailDisputeOpened({
+        raiserName: raiser.name,
+        jobTitle: job.title,
+        recipientName: recipient.name ?? "Recipient",
+      }),
+    });
+  }
 
   return NextResponse.json(dispute, { status: 201 });
 }
