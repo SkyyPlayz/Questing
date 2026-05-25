@@ -1,12 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { calculateCheckoutAmountCents } from "@/app/lib/paymentAmount";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+import { getStripe } from "@/app/lib/stripe";
 
 export async function POST(req: NextRequest) {
+  const stripe = getStripe();
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

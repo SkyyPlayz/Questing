@@ -1,12 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
 import { awardXP } from "@/app/lib/xp";
 import { sendEmail, emailJobCompleted, emailPaymentReleased, emailDisputeOpened, BASE } from "@/app/lib/email";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+import { getStripe } from "@/app/lib/stripe";
 
 async function updateReliabilityScore(workerId: string) {
   const [accepted, completed] = await Promise.all([
@@ -51,6 +49,7 @@ export async function GET(_req: NextRequest, { params }: Params) {
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
+  const stripe = getStripe();
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
