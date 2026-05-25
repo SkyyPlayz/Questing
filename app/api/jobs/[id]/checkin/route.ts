@@ -3,6 +3,7 @@ import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { awardXP } from "@/app/lib/xp";
 import { sendEmail, emailIncidentReported, BASE } from "@/app/lib/email";
+import { canViewCheckIns } from "@/app/lib/checkinAuth";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -182,8 +183,23 @@ export async function GET(req: NextRequest, { params }: Params) {
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
+  const user = session.user as { id: string; role: string };
 
   const { id } = await params;
+
+  // Fetch the job with its accepted applications so we can authorise the caller.
+  const job = await prisma.job.findUnique({
+    where: { id },
+    include: {
+      applications: { where: { status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } } },
+    },
+  });
+  if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+
+  if (!canViewCheckIns(user.id, user.role, job)) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  }
+
   const checkIns = await prisma.jobCheckIn.findMany({
     where: { jobId: id },
     include: {
