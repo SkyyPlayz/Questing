@@ -3,8 +3,7 @@ import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { sendEmail, emailPaymentReleased, emailPaymentRefunded, BASE } from "@/app/lib/email";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+import { getStripe } from "@/app/lib/stripe";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -21,6 +20,7 @@ async function getBackgroundCheckFeeCents() {
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
+  const stripe = getStripe();
   const session = await auth();
   if (!session?.user) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

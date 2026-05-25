@@ -1,15 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { DisputeOutcome } from "@prisma/client";
 import { sendEmail, emailDisputeResolved } from "@/app/lib/email";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+import { getStripe } from "@/app/lib/stripe";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function PATCH(req: NextRequest, { params }: Params) {
+  const stripe = getStripe();
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const user = session.user as { role: string };

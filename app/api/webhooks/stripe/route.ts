@@ -1,11 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/app/lib/prisma";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+import { getStripe } from "@/app/lib/stripe";
 
 export async function POST(req: NextRequest) {
+  if (!process.env.STRIPE_WEBHOOK_SECRET) {
+    return NextResponse.json({ error: "Stripe is not configured" }, { status: 500 });
+  }
+  const stripe = getStripe();
+  const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
+
   const body = await req.text();
   const sig = req.headers.get("stripe-signature");
 
