@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { auth } from "@/app/lib/auth";
+import { canAccessChatThread, canWorkerCreatePrivateThread } from "@/app/lib/chat-authorization.mjs";
 
 export async function GET(
   request: NextRequest,
@@ -23,9 +24,6 @@ export async function GET(
         },
         orderBy: { createdAt: "asc" },
       },
-      applications: {
-        select: { workerId: true, status: true },
-      },
     },
   });
 
@@ -33,17 +31,11 @@ export async function GET(
     return NextResponse.json({ error: "Job not found" }, { status: 404 });
   }
 
-  // Filter private threads: only poster and accepted workers can see them
-  const acceptedWorkerIds = job.applications
-    .filter((a) => a.status === "ACCEPTED" || a.status === "FCFS_ACCEPTED")
-    .map((a) => a.workerId);
-
   const visibleThreads = job.chatThreads.filter((t) => {
-    if (t.threadType === "PUBLIC_QA") return true;
-    if (t.threadType === "PRIVATE") {
-      return user?.id === job.posterId || acceptedWorkerIds.includes(user?.id ?? "");
-    }
-    return false;
+    return canAccessChatThread(
+      { threadType: t.threadType, posterId: job.posterId, privateWorkerId: t.privateWorkerId },
+      user?.id
+    );
   });
 
   return NextResponse.json({ threads: visibleThreads });
@@ -121,7 +113,7 @@ export async function POST(
         { status: 400 }
       );
     }
-    if (application.status !== "ACCEPTED" && application.status !== "FCFS_ACCEPTED") {
+    if (!canWorkerCreatePrivateThread(application)) {
       return NextResponse.json(
         { error: "Worker must be ACCEPTED or FCFS_ACCEPTED to have a private thread" },
         { status: 400 }
@@ -133,9 +125,7 @@ export async function POST(
       where: {
         jobId: id,
         threadType: "PRIVATE",
-        messages: {
-          some: { senderId: user.id },
-        },
+        privateWorkerId: workerId,
       },
     });
     if (existing) {
@@ -150,6 +140,7 @@ export async function POST(
     data: {
       jobId: id,
       threadType,
+      privateWorkerId: threadType === "PRIVATE" ? workerId : null,
     },
     include: {
       messages: {

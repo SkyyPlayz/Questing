@@ -79,7 +79,7 @@ export async function POST(req: NextRequest, { params }: Params) {
 
       // Auto-create PRIVATE chat thread between poster and FCFS worker
       await prisma.chatThread.create({
-        data: { jobId: id, threadType: "PRIVATE" },
+        data: { jobId: id, threadType: "PRIVATE", privateWorkerId: user.id },
       });
 
       await awardXP(user.id, "JOB_ACCEPTED", id);
@@ -191,7 +191,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         data: { status: "IN_PROGRESS", fcfsLockedAt: null },
       }),
       prisma.chatThread.create({
-        data: { jobId: id, threadType: "PRIVATE" },
+        data: { jobId: id, threadType: "PRIVATE", privateWorkerId: application.workerId },
       }),
     ]);
     await awardXP(application.workerId, "JOB_ACCEPTED", id);

@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { auth } from "@/app/lib/auth";
 import { sendEmail, emailNewChatMessage, BASE } from "@/app/lib/email";
+import { canAccessChatThread } from "@/app/lib/chat-authorization.mjs";
 
 export async function GET(
   request: NextRequest,
@@ -26,21 +27,13 @@ export async function GET(
     return NextResponse.json({ error: "Thread not found" }, { status: 404 });
   }
 
-  // Access control: public QA open to all, private only poster + accepted workers
-  const applications = await prisma.application.findMany({
-    where: { jobId: thread.jobId },
-    select: { workerId: true, status: true },
-  });
-  const acceptedWorkerIds = applications
-    .filter((a) => a.status === "ACCEPTED" || a.status === "FCFS_ACCEPTED")
-    .map((a) => a.workerId);
-
-  if (thread.threadType === "PRIVATE") {
-    const isPoster = user?.id === thread.job.posterId;
-    const isAcceptedWorker = acceptedWorkerIds.includes(user?.id ?? "");
-    if (!isPoster && !isAcceptedWorker) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
+  if (
+    !canAccessChatThread(
+      { threadType: thread.threadType, posterId: thread.job.posterId, privateWorkerId: thread.privateWorkerId },
+      user?.id
+    )
+  ) {
+    return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 
   return NextResponse.json({
@@ -79,19 +72,13 @@ export async function POST(
   }
 
   // Access control for posting
-  if (thread.threadType === "PRIVATE") {
-    const applications = await prisma.application.findMany({
-      where: { jobId: thread.jobId },
-      select: { workerId: true, status: true },
-    });
-    const acceptedWorkerIds = applications
-      .filter((a) => a.status === "ACCEPTED" || a.status === "FCFS_ACCEPTED")
-      .map((a) => a.workerId);
-    const isPoster = user.id === thread.job.posterId;
-    const isAcceptedWorker = acceptedWorkerIds.includes(user.id);
-    if (!isPoster && !isAcceptedWorker) {
-      return NextResponse.json({ error: "Access denied" }, { status: 403 });
-    }
+  if (
+    !canAccessChatThread(
+      { threadType: thread.threadType, posterId: thread.job.posterId, privateWorkerId: thread.privateWorkerId },
+      user.id
+    )
+  ) {
+    return NextResponse.json({ error: "Access denied" }, { status: 403 });
   }
 
   const message = await prisma.chatMessage.create({
@@ -112,12 +99,8 @@ export async function POST(
   // Send chat notification to the other participant (skip if public QA)
   if (thread.threadType === "PRIVATE") {
     const sender = message.sender;
-    const acceptedApps = await prisma.application.findMany({
-      where: { jobId: thread.jobId, status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } },
-      select: { workerId: true },
-    });
-    const recipient = user.id === thread.job.posterId && acceptedApps[0]
-      ? await prisma.user.findUnique({ where: { id: acceptedApps[0].workerId }, select: { name: true, email: true } })
+    const recipient = user.id === thread.job.posterId && thread.privateWorkerId
+      ? await prisma.user.findUnique({ where: { id: thread.privateWorkerId }, select: { name: true, email: true } })
       : await prisma.user.findUnique({ where: { id: thread.job.posterId }, select: { name: true, email: true } });
     if (recipient) {
       await sendEmail({
