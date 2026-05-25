@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { calculateCheckoutAmountCents } from "@/app/lib/paymentAmount";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -36,7 +37,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Payment already initiated for this job" }, { status: 409 });
   }
 
-  const amountCents = Math.round(job.payRate * 100);
+  let amountCents: number;
+  try {
+    amountCents = calculateCheckoutAmountCents(job);
+  } catch (error) {
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Invalid job payment amount" },
+      { status: 400 },
+    );
+  }
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
   const checkoutSession = await stripe.checkout.sessions.create({
