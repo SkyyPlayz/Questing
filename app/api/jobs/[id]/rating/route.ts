@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { parseRatingScore } from "@/app/lib/ratingScore";
 import { awardXP } from "@/app/lib/xp";
 
 type Params = { params: Promise<{ id: string }> };
@@ -49,8 +50,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   const { score, comment } = await req.json();
-  if (!score || score < 1 || score > 5) {
-    return NextResponse.json({ error: "score must be 1–5" }, { status: 400 });
+  const numericScore = parseRatingScore(score);
+  if (numericScore === null) {
+    return NextResponse.json({ error: "score must be an integer from 1 to 5" }, { status: 400 });
   }
 
   // Determine who is being rated
@@ -66,12 +68,12 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (existing) return NextResponse.json({ error: "Already rated" }, { status: 409 });
 
   const rating = await prisma.rating.create({
-    data: { jobId, fromUserId: user.id, toUserId, score, comment: comment || null },
+    data: { jobId, fromUserId: user.id, toUserId, score: numericScore, comment: comment || null },
   });
 
   await recomputeCompetency(toUserId);
 
-  if (score === 5) {
+  if (numericScore === 5) {
     await awardXP(toUserId, "RATING_RECEIVED_5_STAR", jobId);
   }
 
