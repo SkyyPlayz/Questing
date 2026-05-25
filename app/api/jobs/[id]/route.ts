@@ -5,6 +5,7 @@ import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
 import { awardXP } from "@/app/lib/xp";
 import { sendEmail, emailJobCompleted, emailPaymentReleased, emailDisputeOpened, BASE } from "@/app/lib/email";
+import { validateJobUpdateFields } from "@/app/lib/jobValidation";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -85,6 +86,11 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         { status: 400 }
       );
     }
+  }
+
+  const validationErrors = validateJobUpdateFields({ payRate, startDate, endDate });
+  if (validationErrors.length > 0) {
+    return NextResponse.json({ errors: validationErrors }, { status: 400 });
   }
 
   const updated = await prisma.job.update({

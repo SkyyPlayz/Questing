@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
+import { validateJobCreateFields } from "@/app/lib/jobValidation";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
@@ -37,6 +38,18 @@ export async function POST(req: NextRequest) {
 
   if (!title || !description || !category || !location || !payRate) {
     return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  }
+
+  const validationErrors = validateJobCreateFields({
+    payRate,
+    startDate,
+    endDate,
+    fcfsTimeoutMinutes,
+    locationLat,
+    locationLng,
+  });
+  if (validationErrors.length > 0) {
+    return NextResponse.json({ errors: validationErrors }, { status: 400 });
   }
 
   const job = await prisma.job.create({
