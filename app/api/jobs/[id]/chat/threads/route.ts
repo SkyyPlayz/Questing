@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { auth } from "@/app/lib/auth";
 import { canAccessChatThread, canWorkerCreatePrivateThread } from "@/app/lib/chat-authorization.mjs";
+import { createChatThreadIdempotently } from "@/app/lib/chat-thread-creation.mjs";
 
 export async function GET(
   request: NextRequest,
@@ -84,19 +85,6 @@ export async function POST(
     );
   }
 
-  // Prevent duplicate PUBLIC_QA threads
-  if (threadType === "PUBLIC_QA") {
-    const existing = await prisma.chatThread.findFirst({
-      where: { jobId: id, threadType: "PUBLIC_QA" },
-    });
-    if (existing) {
-      return NextResponse.json(
-        { error: "A public Q&A thread already exists for this job" },
-        { status: 409 }
-      );
-    }
-  }
-
   // For PRIVATE threads, workerId is required
   if (threadType === "PRIVATE") {
     if (!workerId) {
@@ -119,37 +107,23 @@ export async function POST(
         { status: 400 }
       );
     }
-
-    // Prevent duplicate private threads between same poster-worker pair
-    const existing = await prisma.chatThread.findFirst({
-      where: {
-        jobId: id,
-        threadType: "PRIVATE",
-        privateWorkerId: workerId,
-      },
-    });
-    if (existing) {
-      return NextResponse.json(
-        { error: "A private thread already exists between you and this worker" },
-        { status: 409 }
-      );
-    }
   }
 
-  const thread = await prisma.chatThread.create({
-    data: {
+  const { thread, created } = await createChatThreadIdempotently(
+    prisma,
+    {
       jobId: id,
       threadType,
-      privateWorkerId: threadType === "PRIVATE" ? workerId : null,
+      workerId,
     },
-    include: {
+    {
       messages: {
         orderBy: { createdAt: "desc" },
         take: 1,
         include: { sender: { select: { id: true, name: true } } },
       },
-    },
-  });
+    }
+  );
 
-  return NextResponse.json({ thread }, { status: 201 });
+  return NextResponse.json({ thread }, { status: created ? 201 : 200 });
 }

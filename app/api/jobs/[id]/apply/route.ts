@@ -3,6 +3,7 @@ import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { awardXP } from "@/app/lib/xp";
 import { sendEmail, emailApplicationSubmitted, emailApplicationAccepted, emailApplicationRejected } from "@/app/lib/email";
+import { createChatThreadIdempotently } from "@/app/lib/chat-thread-creation.mjs";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -77,9 +78,11 @@ export async function POST(req: NextRequest, { params }: Params) {
         data: { status: "IN_PROGRESS", fcfsLockedAt: new Date() },
       });
 
-      // Auto-create PRIVATE chat thread between poster and FCFS worker
-      await prisma.chatThread.create({
-        data: { jobId: id, threadType: "PRIVATE", privateWorkerId: user.id },
+      // Auto-create or reuse the PRIVATE chat thread between poster and FCFS worker.
+      await createChatThreadIdempotently(prisma, {
+        jobId: id,
+        threadType: "PRIVATE",
+        workerId: user.id,
       });
 
       await awardXP(user.id, "JOB_ACCEPTED", id);
@@ -177,23 +180,25 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     if (application.status !== "PENDING" || job.status !== "OPEN") {
       return NextResponse.json({ error: "Cannot accept — job is FCFS-locked or application not pending" }, { status: 400 });
     }
-    await prisma.$transaction([
-      prisma.application.update({
+    await prisma.$transaction(async (tx) => {
+      await tx.application.update({
         where: { id: applicationId },
         data: { status: "ACCEPTED" },
-      }),
-      prisma.application.updateMany({
+      });
+      await tx.application.updateMany({
         where: { jobId: id, id: { not: applicationId } },
         data: { status: "REJECTED" },
-      }),
-      prisma.job.update({
+      });
+      await tx.job.update({
         where: { id },
         data: { status: "IN_PROGRESS", fcfsLockedAt: null },
-      }),
-      prisma.chatThread.create({
-        data: { jobId: id, threadType: "PRIVATE", privateWorkerId: application.workerId },
-      }),
-    ]);
+      });
+      await createChatThreadIdempotently(tx, {
+        jobId: id,
+        threadType: "PRIVATE",
+        workerId: application.workerId,
+      });
+    });
     await awardXP(application.workerId, "JOB_ACCEPTED", id);
 
     // Send acceptance email to worker
