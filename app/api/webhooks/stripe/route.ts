@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/app/lib/prisma";
+import { applyBackgroundCheckPaymentCompletion } from "@/app/lib/stripeWebhookBackgroundCheck";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
@@ -34,20 +35,13 @@ export async function POST(req: NextRequest) {
         });
       }
       // Handle background check fee checkout
-      if (session.payment_intent && session.metadata?.workerId) {
-        await prisma.backgroundCheckFee.updateMany({
-          where: { workerId: session.metadata.workerId, status: "PENDING" },
-          data: {
-            stripePaymentIntentId: session.payment_intent as string,
-            status: "PAID",
-          },
-        });
-        // Also update worker's background check status
-        await prisma.workerProfile.updateMany({
-          where: { userId: session.metadata.workerId },
-          data: { backgroundCheckStatus: "PASSED" },
-        });
-      }
+      await applyBackgroundCheckPaymentCompletion({
+        session: {
+          payment_intent: typeof session.payment_intent === "string" ? session.payment_intent : null,
+          metadata: session.metadata,
+        },
+        prisma,
+      });
       break;
     }
 
