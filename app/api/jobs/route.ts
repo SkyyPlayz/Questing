@@ -2,11 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
+import { isValidJobStatus } from "@/app/lib/jobStatus";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const category = searchParams.get("category");
-  const status = searchParams.get("status") as JobStatus | null;
+  const rawStatus = searchParams.get("status");
+
+  if (rawStatus && !isValidJobStatus(rawStatus)) {
+    return NextResponse.json({ error: "Invalid status" }, { status: 400 });
+  }
+
+  const status = rawStatus as JobStatus | null;
 
   const where: Record<string, unknown> = {};
   if (category) where.category = category;
