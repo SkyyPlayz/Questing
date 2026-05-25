@@ -29,7 +29,10 @@ export async function POST(req: NextRequest) {
   const jobFull = await prisma.job.findUnique({
     where: { id: jobId },
     include: {
-      applications: { where: { status: "ACCEPTED" }, include: { worker: { select: { id: true, name: true, email: true } } } },
+      applications: {
+        where: { status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } },
+        include: { worker: { select: { id: true, name: true, email: true } } },
+      },
       poster: { select: { id: true, name: true, email: true } },
     },
   });
