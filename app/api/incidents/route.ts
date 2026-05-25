@@ -2,11 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { sendEmail, emailIncidentReported, BASE } from "@/app/lib/email";
+import { canReportIncident } from "@/app/lib/incidentAccess";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  const user = session.user as { id: string };
+  const user = session.user as { id: string; role?: string };
 
   const { jobId, severity, description } = await req.json();
   if (!jobId || !severity || !description) {
@@ -18,20 +19,25 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "severity must be LOW, MEDIUM, HIGH, or CRITICAL" }, { status: 400 });
   }
 
-  const job = await prisma.job.findUnique({ where: { id: jobId } });
+  const job = await prisma.job.findUnique({
+    where: { id: jobId },
+    include: {
+      applications: { where: { status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } }, include: { worker: { select: { id: true, name: true, email: true } } } },
+      poster: { select: { id: true, name: true, email: true } },
+    },
+  });
   if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
+
+  const canReport = canReportIncident({
+    userId: user.id,
+    userRole: user.role,
+    posterId: job.posterId,
+    acceptedWorkerIds: job.applications.map((application) => application.workerId),
+  });
+  if (!canReport) return NextResponse.json({ error: "Forbidden" }, { status: 403 });
 
   const incident = await prisma.safetyIncident.create({
     data: { jobId, reporterId: user.id, severity, description },
-  });
-
-  // Notify the other party and admin about the incident
-  const jobFull = await prisma.job.findUnique({
-    where: { id: jobId },
-    include: {
-      applications: { where: { status: "ACCEPTED" }, include: { worker: { select: { id: true, name: true, email: true } } } },
-      poster: { select: { id: true, name: true, email: true } },
-    },
   });
   const reporter = await prisma.user.findUnique({
     where: { id: user.id },
@@ -39,10 +45,10 @@ export async function POST(req: NextRequest) {
   });
 
   let recipient: { name: string | null; email: string } | null = null;
-  if (jobFull?.posterId === user.id && jobFull.applications[0]) {
-    recipient = jobFull.applications[0].worker;
-  } else if (jobFull?.applications[0]?.workerId === user.id) {
-    recipient = jobFull.poster;
+  if (job.posterId === user.id && job.applications[0]) {
+    recipient = job.applications[0].worker;
+  } else if (job.applications[0]?.workerId === user.id) {
+    recipient = job.poster;
   }
 
   if (recipient?.email && reporter?.name) {
@@ -50,7 +56,7 @@ export async function POST(req: NextRequest) {
       to: { email: recipient.email, name: recipient.name ?? undefined },
       ...emailIncidentReported({
         reporterName: reporter.name,
-        jobTitle: jobFull?.title ?? "unknown job",
+        jobTitle: job.title ?? "unknown job",
         severity,
         recipientName: recipient.name ?? "Recipient",
       }),
@@ -59,12 +65,12 @@ export async function POST(req: NextRequest) {
 
   // Also notify admin
   const adminConfig = await prisma.adminConfig.findUnique({ where: { key: "ADMIN_EMAIL" } });
-  if (adminConfig?.value && jobFull && reporter) {
+  if (adminConfig?.value && reporter) {
     await sendEmail({
       to: { email: adminConfig.value },
-      subject: `Admin alert: ${severity} incident on "${jobFull.title}"`,
+      subject: `Admin alert: ${severity} incident on "${job.title}"`,
       html: BASE.replace("{title}", "Safety Incident Alert").replace("{body}",
-        `Hi Admin,\n\n${reporter.name ?? "a user"} has reported a ${severity} severity incident on job "${jobFull.title}".\n\nDescription: ${description}\n\nPlease review and take appropriate action.`
+        `Hi Admin,\n\n${reporter.name ?? "a user"} has reported a ${severity} severity incident on job "${job.title}".\n\nDescription: ${description}\n\nPlease review and take appropriate action.`
       ),
     });
   }
