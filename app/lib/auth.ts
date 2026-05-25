@@ -2,6 +2,7 @@ import NextAuth from "next-auth";
 import CredentialsProvider from "next-auth/providers/credentials";
 import { prisma } from "./prisma";
 import bcrypt from "bcryptjs";
+import { isLoginAllowed } from "./userStatus";
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   secret: process.env.NEXTAUTH_SECRET,
@@ -24,6 +25,7 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
           user.passwordHash
         );
         if (!valid) return null;
+        if (!isLoginAllowed(user.status)) return null;
         return { id: user.id, email: user.email, name: user.name, role: user.role };
       },
     }),
