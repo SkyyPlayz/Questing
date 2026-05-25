@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { sendEmail } from "@/app/lib/email";
+import { isTokenValid } from "@/app/lib/authTokens";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
@@ -66,7 +67,7 @@ export async function GET(req: NextRequest) {
     where: { identifier_token: { identifier: `verify:${email}`, token } },
   });
 
-  if (!record || record.expires < new Date()) {
+  if (!isTokenValid(record)) {
     return NextResponse.json({ error: "Invalid or expired verification link" }, { status: 400 });
   }
 
