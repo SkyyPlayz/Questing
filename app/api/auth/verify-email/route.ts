@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { sendEmail } from "@/app/lib/email";
+import { replaceVerificationToken } from "@/app/lib/auth-tokens";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
@@ -15,21 +16,7 @@ export async function POST(req: NextRequest) {
   const token = crypto.randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24 hours
 
-  // Find existing token by identifier only (not by token value)
-  const existing = await prisma.verificationToken.findFirst({
-    where: { identifier: `verify:${email}` },
-  });
-
-  if (existing) {
-    await prisma.verificationToken.update({
-      where: { identifier_token: { identifier: `verify:${email}`, token: existing.token } },
-      data: { token, expires },
-    });
-  } else {
-    await prisma.verificationToken.create({
-      data: { identifier: `verify:${email}`, token, expires },
-    });
-  }
+  await replaceVerificationToken(`verify:${email}`, token, expires);
 
   const verifyUrl = `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/verify-email?token=${token}&email=${encodeURIComponent(email)}`;
 

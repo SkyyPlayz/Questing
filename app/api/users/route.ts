@@ -3,6 +3,7 @@ import { prisma } from "@/app/lib/prisma";
 import bcrypt from "bcryptjs";
 import { awardXP } from "@/app/lib/xp";
 import { sendEmail } from "@/app/lib/email";
+import { replaceVerificationToken } from "@/app/lib/auth-tokens";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
@@ -32,11 +33,7 @@ export async function POST(req: NextRequest) {
   // Send email verification
   const verifyToken = crypto.randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24 hours
-  await prisma.verificationToken.upsert({
-    where: { identifier_token: { identifier: `verify:${email}`, token: email } },
-    update: { token: verifyToken, expires },
-    create: { identifier: `verify:${email}`, token: verifyToken, expires },
-  });
+  await replaceVerificationToken(`verify:${email}`, verifyToken, expires);
 
   const verifyUrl = `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/verify-email?token=${verifyToken}&email=${encodeURIComponent(email)}`;
   await sendEmail({
