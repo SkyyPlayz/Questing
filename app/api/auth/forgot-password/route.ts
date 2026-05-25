@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { sendEmail } from "@/app/lib/email";
+import { isTokenValid } from "@/app/lib/authTokens";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
@@ -14,11 +15,24 @@ export async function POST(req: NextRequest) {
   const token = crypto.randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
 
-  await prisma.verificationToken.upsert({
-    where: { identifier_token: { identifier: `reset:${email}`, token: email } },
-    update: { token, expires },
-    create: { identifier: `reset:${email}`, token, expires },
+  // Find any existing reset token by identifier only, then update or create.
+  // Using findFirst + update/create avoids the broken upsert pattern where
+  // the compound-key lookup used `token: email` (the email address) rather
+  // than the previously stored hex token value.
+  const existingReset = await prisma.verificationToken.findFirst({
+    where: { identifier: `reset:${email}` },
   });
+
+  if (existingReset) {
+    await prisma.verificationToken.update({
+      where: { identifier_token: { identifier: `reset:${email}`, token: existingReset.token } },
+      data: { token, expires },
+    });
+  } else {
+    await prisma.verificationToken.create({
+      data: { identifier: `reset:${email}`, token, expires },
+    });
+  }
 
   const resetUrl = `${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/reset-password?token=${token}&email=${encodeURIComponent(email)}`;
 

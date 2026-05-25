@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
+import { isTokenValid } from "@/app/lib/authTokens";
 import bcrypt from "bcryptjs";
 
 export async function POST(req: NextRequest) {
@@ -15,7 +16,7 @@ export async function POST(req: NextRequest) {
     where: { identifier_token: { identifier: `reset:${email}`, token } },
   });
 
-  if (!record || record.expires < new Date()) {
+  if (!isTokenValid(record)) {
     return NextResponse.json({ error: "Invalid or expired reset link" }, { status: 400 });
   }
 
