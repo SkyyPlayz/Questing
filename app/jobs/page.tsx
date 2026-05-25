@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/app/lib/prisma";
 import { auth } from "@/app/lib/auth";
+import { isValidJobStatus } from "@/app/lib/jobStatus";
 
 const CATEGORIES = ["All", "Landscaping", "Cleaning", "Moving", "Handyman", "Childcare", "Delivery", "Other"];
 
@@ -15,7 +16,8 @@ export default async function JobsPage({
   const user = session?.user as { id?: string; role?: string } | undefined;
   const sp = await searchParams;
   const category = sp.category;
-  const status = sp.status || "OPEN";
+  const rawStatus = sp.status;
+  const status = rawStatus && isValidJobStatus(rawStatus) ? rawStatus : "OPEN";
 
   const where: Record<string, unknown> = { status };
   if (category && category !== "All") where.category = category;
