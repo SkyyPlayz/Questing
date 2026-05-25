@@ -55,6 +55,39 @@ function stripHtml(html: string): string {
 
 // ─── Template helpers ───────────────────────────────────────────────
 
+export function escapeHtml(value: string | number | null | undefined): string {
+  return String(value ?? "").replace(/[&<>"']/g, (char) => {
+    switch (char) {
+      case "&":
+        return "&amp;";
+      case "<":
+        return "&lt;";
+      case ">":
+        return "&gt;";
+      case "\"":
+        return "&quot;";
+      case "'":
+        return "&#39;";
+      default:
+        return char;
+    }
+  });
+}
+
+export function validateEmailUrl(url: string): string {
+  const parsed = new URL(url);
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    throw new Error("Email URL must use http or https");
+  }
+  return parsed.toString();
+}
+
+export function renderEmail(title: string, body: string): string {
+  return BASE
+    .replace("{title}", escapeHtml(title))
+    .replace("{body}", escapeHtml(body).replace(/\n/g, "<br />\n"));
+}
+
 export const BASE = `
 <div style="max-width:600px;margin:0 auto;font-family:Arial,sans-serif;">
   <h2 style="color:#1a1a2e;margin-bottom:20px;">{title}</h2>
@@ -69,7 +102,7 @@ export function emailApplicationSubmitted({ workerName, jobTitle, posterName }: 
 }) {
   return {
     subject: `New application for "${jobTitle}"`,
-    html: BASE.replace("{title}", "New Application").replace("{body}",
+    html: renderEmail("New Application",
       `Hi ${posterName},\n\n${workerName} has applied for your job "${jobTitle}".\n\nYou can review the application and accept or reject it from your dashboard.`
     ),
   };
@@ -80,7 +113,7 @@ export function emailApplicationAccepted({ workerName, jobTitle, posterName }: {
 }) {
   return {
     subject: `Your application for "${jobTitle}" was accepted!`,
-    html: BASE.replace("{title}", "Application Accepted").replace("{body}",
+    html: renderEmail("Application Accepted",
       `Hi ${workerName},\n\nGreat news! ${posterName} has accepted your application for "${jobTitle}".\n\nYour quest is now in progress. Head to the job page to get started.`
     ),
   };
@@ -91,7 +124,7 @@ export function emailApplicationRejected({ workerName, jobTitle, posterName }: {
 }) {
   return {
     subject: `Application for "${jobTitle}" — not accepted this time`,
-    html: BASE.replace("{title}", "Application Not Accepted").replace("{body}",
+    html: renderEmail("Application Not Accepted",
       `Hi ${workerName},\n\nThank you for applying to "${jobTitle}" by ${posterName}. This time the job was filled with another applicant, but keep questing — more jobs are always open.`
     ),
   };
@@ -102,7 +135,7 @@ export function emailJobCompleted({ workerName, jobTitle, payRate, payUnit }: {
 }) {
   return {
     subject: `Quest completed! "${jobTitle}"`,
-    html: BASE.replace("{title}", "Quest Completed!").replace("{body}",
+    html: renderEmail("Quest Completed!",
       `Hi ${workerName},\n\nCongratulations! You've completed "${jobTitle}".\n\nReward: ${payRate} ${payUnit}\n\nXP awarded: 100 (QUEST_COMPLETED)\n\nIf payment was held via Stripe, you'll receive it shortly. Check your dashboard for the status.`
     ),
   };
@@ -113,7 +146,7 @@ export function emailPaymentReleased({ workerName, jobTitle, amount }: {
 }) {
   return {
     subject: `Payment released for "${jobTitle}"`,
-    html: BASE.replace("{title}", "Payment Released").replace("{body}",
+    html: renderEmail("Payment Released",
       `Hi ${workerName},\n\nPayment for "${jobTitle}" has been released.\n\nAmount: $${(amount / 100).toFixed(2)}\n\nThe funds have been transferred to your Stripe account. Check your dashboard for details.`
     ),
   };
@@ -124,7 +157,7 @@ export function emailPaymentRefunded({ workerName, jobTitle, amount }: {
 }) {
   return {
     subject: `Payment refunded for "${jobTitle}"`,
-    html: BASE.replace("{title}", "Payment Refunded").replace("{body}",
+    html: renderEmail("Payment Refunded",
       `Hi ${workerName},\n\nPayment for "${jobTitle}" has been refunded.\n\nAmount: $${(amount / 100).toFixed(2)}\n\nThe funds have been returned to your Stripe account.`
     ),
   };
@@ -135,7 +168,7 @@ export function emailDisputeOpened({ raiserName, jobTitle, recipientName }: {
 }) {
   return {
     subject: `Dispute opened on "${jobTitle}"`,
-    html: BASE.replace("{title}", "Dispute Opened").replace("{body}",
+    html: renderEmail("Dispute Opened",
       `Hi ${recipientName},\n\n${raiserName} has opened a dispute on job "${jobTitle}".\n\nThe job status is now DISPUTED. Please check the dispute details and respond promptly. Admin will review and mediate.`
     ),
   };
@@ -146,7 +179,7 @@ export function emailIncidentReported({ reporterName, jobTitle, severity, recipi
 }) {
   return {
     subject: `Safety incident reported on "${jobTitle}" (${severity})`,
-    html: BASE.replace("{title}", "Safety Incident Reported").replace("{body}",
+    html: renderEmail("Safety Incident Reported",
       `Hi ${recipientName},\n\n${reporterName} has reported a safety incident on job "${jobTitle}".\n\nSeverity: ${severity}\n\nPlease review the incident details and take appropriate action.`
     ),
   };
@@ -157,7 +190,7 @@ export function emailNewChatMessage({ senderName, jobTitle, recipientName }: {
 }) {
   return {
     subject: `New message on "${jobTitle}"`,
-    html: BASE.replace("{title}", "New Message").replace("{body}",
+    html: renderEmail("New Message",
       `Hi ${recipientName},\n\n${senderName} sent a message on the chat thread for "${jobTitle}".\n\nCheck the job page to read the message and respond.`
     ),
   };
@@ -168,7 +201,7 @@ export function emailDisputeResolved({ raiserName, jobTitle, recipientName, outc
 }) {
   return {
     subject: `Dispute resolved on "${jobTitle}"`,
-    html: BASE.replace("{title}", "Dispute Resolved").replace("{body}",
+    html: renderEmail("Dispute Resolved",
       `Hi ${recipientName},\n\nThe dispute on "${jobTitle}" raised by ${raiserName} has been resolved.\n\nOutcome: ${outcome}\n\nThe job status has been updated accordingly. Check your dashboard for details.`
     ),
   };

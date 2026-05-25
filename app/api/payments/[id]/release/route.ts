@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
-import { sendEmail, emailPaymentReleased, emailPaymentRefunded, BASE } from "@/app/lib/email";
+import { sendEmail, emailPaymentReleased, emailPaymentRefunded, renderEmail } from "@/app/lib/email";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       await sendEmail({
         to: { email: poster.email, name: poster.name ?? undefined },
         subject: `Payment released for "${payment.job.title}"`,
-        html: BASE.replace("{title}", "Payment Released").replace("{body}",
+        html: renderEmail("Payment Released",
           `Hi ${poster.name ?? "there"},\n\nPayment for "${payment.job.title}" has been released.\n\nAmount: $${(payment.amount / 100).toFixed(2)}\n\nThe quest is now fully settled.`
         ),
       });
@@ -140,7 +140,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       await sendEmail({
         to: { email: poster.email, name: poster.name ?? undefined },
         subject: `Payment refunded for "${payment.job.title}"`,
-        html: BASE.replace("{title}", "Payment Refunded").replace("{body}",
+        html: renderEmail("Payment Refunded",
           `Hi ${poster.name ?? "there"},\n\nPayment for "${payment.job.title}" has been refunded.\n\nAmount: $${(payment.amount / 100).toFixed(2)}\n\nThe quest is now fully settled.`
         ),
       });

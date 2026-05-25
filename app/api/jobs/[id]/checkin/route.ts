@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { awardXP } from "@/app/lib/xp";
-import { sendEmail, emailIncidentReported, BASE } from "@/app/lib/email";
+import { sendEmail, emailIncidentReported, renderEmail } from "@/app/lib/email";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -128,7 +128,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       await sendEmail({
         to: { email: adminConfig.value },
         subject: `Admin alert: Worker out-of-range on "${job.title}"`,
-        html: BASE.replace("{title}", "Out-of-Range Alert").replace("{body}",
+        html: renderEmail("Out-of-Range Alert",
           `Hi Admin,\n\n${worker.name ?? "a worker"} checked in ${distanceM?.toFixed(0)}m from the job location for "${job.title}" — outside the 500m range.\n\nAn incident has been created for review.`
         ),
       });

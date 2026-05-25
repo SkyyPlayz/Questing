@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
-import { sendEmail, emailIncidentReported, BASE } from "@/app/lib/email";
+import { sendEmail, emailIncidentReported, renderEmail } from "@/app/lib/email";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -63,7 +63,7 @@ export async function POST(req: NextRequest) {
     await sendEmail({
       to: { email: adminConfig.value },
       subject: `Admin alert: ${severity} incident on "${jobFull.title}"`,
-      html: BASE.replace("{title}", "Safety Incident Alert").replace("{body}",
+      html: renderEmail("Safety Incident Alert",
         `Hi Admin,\n\n${reporter.name ?? "a user"} has reported a ${severity} severity incident on job "${jobFull.title}".\n\nDescription: ${description}\n\nPlease review and take appropriate action.`
       ),
     });
