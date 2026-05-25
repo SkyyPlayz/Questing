@@ -13,7 +13,7 @@ export default function JobMap() {
       try {
         const res = await fetch("/api/jobs/map?lat=43.0731&lng=-104.1458&radius=25");
         const data = await res.json();
-        setJobs(data);
+        setJobs(res.ok && Array.isArray(data) ? data : []);
       } catch {
         setJobs([]);
       }

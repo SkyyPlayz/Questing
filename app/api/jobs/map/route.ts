@@ -1,12 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
+import { parseJobMapQuery } from "@/app/lib/job-map-query.mjs";
 
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
-  const lat = searchParams.get("lat");
-  const lng = searchParams.get("lng");
-  const radius = searchParams.get("radius") || "25"; // km
+  const query = parseJobMapQuery(searchParams);
+
+  if (!query.ok) {
+    return NextResponse.json(query, { status: 400 });
+  }
 
   // Get jobs with coordinates that are OPEN
   const jobs = await prisma.job.findMany({
@@ -22,8 +25,7 @@ export async function GET(req: Request) {
   });
 
   // Calculate distance from user location and filter by radius
-  const userLat = lat ? parseFloat(lat) : 43.0731; // Lincoln County, WY default
-  const userLng = lng ? parseFloat(lng) : -104.1458;
+  const { lat: userLat, lng: userLng, radius } = query.value;
 
   const filtered = jobs
     .map((job) => {
@@ -32,7 +34,7 @@ export async function GET(req: Request) {
       const dist = haversineDistance(userLat, userLng, jobLat, jobLng);
       return { ...job, distance: dist };
     })
-    .filter((job) => job.distance <= parseFloat(radius));
+    .filter((job) => job.distance <= radius);
 
   // Assign difficulty tier based on payRate
   const enriched = filtered.map((job) => ({

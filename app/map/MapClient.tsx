@@ -39,13 +39,26 @@ export default function MapClient() {
   const [userPos, setUserPos] = useState<{ lat: number; lng: number } | null>(null);
   const [radius, setRadius] = useState(25);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const fetchJobs = async (lat: number, lng: number, r: number) => {
     setLoading(true);
-    const res = await fetch(`/api/jobs/map?lat=${lat}&lng=${lng}&radius=${r}`);
-    const data = await res.json();
-    setJobs(data);
-    setLoading(false);
+    setError(null);
+    try {
+      const res = await fetch(`/api/jobs/map?lat=${lat}&lng=${lng}&radius=${r}`);
+      const data = await res.json();
+      if (!res.ok) {
+        setJobs([]);
+        setError(data.message || "Unable to load quests for this map view.");
+        return;
+      }
+      setJobs(Array.isArray(data) ? data : []);
+    } catch {
+      setJobs([]);
+      setError("Unable to load quests for this map view.");
+    } finally {
+      setLoading(false);
+    }
   };
 
   useEffect(() => {
@@ -140,7 +153,7 @@ export default function MapClient() {
       {/* Top bar */}
       <div className="bg-gray-900 text-white px-4 py-2 flex items-center gap-4 text-sm flex-wrap">
         <span className="font-bold text-yellow-400 text-base">🗺️ Quest Map</span>
-        <span className="text-gray-400">{loading ? "Loading quests..." : `${jobs.length} quests nearby`}</span>
+        <span className={error ? "text-red-300" : "text-gray-400"}>{error || (loading ? "Loading quests..." : `${jobs.length} quests nearby`)}</span>
         <div className="flex items-center gap-2 ml-auto">
           <span className="text-gray-400">Radius:</span>
           {[10, 25, 50, 100].map((r) => (
