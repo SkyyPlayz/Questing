@@ -5,6 +5,7 @@ import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
 import { awardXP } from "@/app/lib/xp";
 import { sendEmail, emailJobCompleted, emailPaymentReleased, emailDisputeOpened, BASE } from "@/app/lib/email";
+import { getJobAccessLevel } from "@/app/lib/jobVisibility";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -29,25 +30,76 @@ type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
-  const job = await prisma.job.findUnique({
+  const session = await auth();
+  const user = session?.user as { id?: string; role?: string } | undefined;
+
+  // Lightweight first query: fetch public-safe fields and enough to determine access level.
+  const jobBase = await prisma.job.findUnique({
     where: { id },
     include: {
-      poster: { select: { id: true, name: true, email: true } },
+      poster: { select: { id: true, name: true } },
       applications: {
-        include: { worker: { select: { id: true, name: true, email: true, userLevel: true } } },
-      },
-      jobCheckIns: {
-        include: { worker: { select: { id: true, name: true, userLevel: true } } },
-        orderBy: { timestamp: "desc" },
-      },
-      incidents: {
-        where: { status: "OPEN" },
-        select: { id: true, severity: true, description: true, createdAt: true },
+        where: { status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } },
+        select: { workerId: true },
       },
     },
   });
-  if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(job);
+
+  if (!jobBase) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  const acceptedWorkerIds = jobBase.applications.map((a) => a.workerId);
+  const level = getJobAccessLevel(user?.id, user?.role, jobBase.posterId, acceptedWorkerIds);
+
+  if (level === "full") {
+    // Poster or admin: full detail including emails, all applications, check-ins, and incidents.
+    const fullJob = await prisma.job.findUnique({
+      where: { id },
+      include: {
+        poster: { select: { id: true, name: true, email: true } },
+        applications: {
+          include: { worker: { select: { id: true, name: true, email: true, userLevel: true } } },
+        },
+        jobCheckIns: {
+          include: { worker: { select: { id: true, name: true, userLevel: true } } },
+          orderBy: { timestamp: "desc" },
+        },
+        incidents: {
+          where: { status: "OPEN" },
+          select: { id: true, severity: true, description: true, createdAt: true },
+        },
+      },
+    });
+    return NextResponse.json(fullJob);
+  }
+
+  if (level === "worker") {
+    // Accepted worker: check-ins and incidents (for safety) plus their own application,
+    // but no other workers' personal details or emails.
+    const workerJob = await prisma.job.findUnique({
+      where: { id },
+      include: {
+        poster: { select: { id: true, name: true } },
+        applications: {
+          where: { workerId: user!.id },
+          include: { worker: { select: { id: true, name: true, userLevel: true } } },
+        },
+        jobCheckIns: {
+          include: { worker: { select: { id: true, name: true, userLevel: true } } },
+          orderBy: { timestamp: "desc" },
+        },
+        incidents: {
+          where: { status: "OPEN" },
+          select: { id: true, severity: true, description: true, createdAt: true },
+        },
+      },
+    });
+    return NextResponse.json(workerJob);
+  }
+
+  // Public (anonymous or unrelated authenticated user): public job fields only —
+  // no emails, no full application list, no check-ins, no incidents.
+  const { applications: _unused, ...publicJob } = jobBase;
+  return NextResponse.json(publicJob);
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
