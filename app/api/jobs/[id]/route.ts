@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { getStripeClient, isStripeConfigurationError } from "@/app/lib/stripe";
 import { JobStatus } from "@prisma/client";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -31,7 +29,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const { id } = await params;
   const user = session.user as { id: string; role: string };
 
-  const job = await prisma.job.findUnique({ where: { id } });
+  const job = await prisma.job.findUnique({ where: { id }, include: { payment: true } });
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
 
   if (job.posterId !== user.id && user.role !== "ADMIN") {
@@ -60,6 +58,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
   }
 
+  let stripeForPaymentAction: ReturnType<typeof getStripeClient> | null = null;
+  const paymentIntentId = job.payment?.stripePaymentIntentId;
+  const needsStripePaymentAction =
+    paymentIntentId &&
+    job.payment?.status === "HELD" &&
+    (status === "COMPLETED" || status === "CANCELLED");
+
+  if (needsStripePaymentAction) {
+    try {
+      stripeForPaymentAction = getStripeClient();
+    } catch (error) {
+      if (isStripeConfigurationError(error)) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      throw error;
+    }
+  }
+
   const updated = await prisma.job.update({
     where: { id },
     include: { payment: true },
@@ -76,13 +92,12 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     },
   });
 
-  if (status && status !== job.status && updated.payment?.stripePaymentIntentId) {
-    const pi = updated.payment.stripePaymentIntentId;
-    if (status === "COMPLETED" && updated.payment.status === "HELD") {
-      await stripe.paymentIntents.capture(pi);
+  if (stripeForPaymentAction && paymentIntentId && updated.payment) {
+    if (status === "COMPLETED") {
+      await stripeForPaymentAction.paymentIntents.capture(paymentIntentId);
       await prisma.payment.update({ where: { id: updated.payment.id }, data: { status: "RELEASED" } });
-    } else if (status === "CANCELLED" && updated.payment.status === "HELD") {
-      await stripe.paymentIntents.cancel(pi);
+    } else if (status === "CANCELLED") {
+      await stripeForPaymentAction.paymentIntents.cancel(paymentIntentId);
       await prisma.payment.update({ where: { id: updated.payment.id }, data: { status: "VOIDED" } });
     }
   }

@@ -1,10 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
+import type Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { calculateCheckoutAmountCents } from "@/app/lib/paymentAmount";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+import { getStripeClient, isStripeConfigurationError } from "@/app/lib/stripe";
 
 export async function POST(req: NextRequest) {
   const session = await auth();
@@ -48,25 +47,33 @@ export async function POST(req: NextRequest) {
   }
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
-  const checkoutSession = await stripe.checkout.sessions.create({
-    mode: "payment",
-    payment_intent_data: {
-      capture_method: "manual",
-    },
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          unit_amount: amountCents,
-          product_data: { name: job.title },
-        },
-        quantity: 1,
+  let checkoutSession: Stripe.Checkout.Session;
+  try {
+    checkoutSession = await getStripeClient().checkout.sessions.create({
+      mode: "payment",
+      payment_intent_data: {
+        capture_method: "manual",
       },
-    ],
-    success_url: `${baseUrl}/jobs/${jobId}?payment=success`,
-    cancel_url: `${baseUrl}/jobs/${jobId}?payment=cancelled`,
-    metadata: { jobId },
-  });
+      line_items: [
+        {
+          price_data: {
+            currency: "usd",
+            unit_amount: amountCents,
+            product_data: { name: job.title },
+          },
+          quantity: 1,
+        },
+      ],
+      success_url: `${baseUrl}/jobs/${jobId}?payment=success`,
+      cancel_url: `${baseUrl}/jobs/${jobId}?payment=cancelled`,
+      metadata: { jobId },
+    });
+  } catch (error) {
+    if (isStripeConfigurationError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    throw error;
+  }
 
   await prisma.payment.create({
     data: {

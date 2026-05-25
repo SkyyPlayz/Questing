@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { getStripeClient, isStripeConfigurationError } from "@/app/lib/stripe";
 import { DisputeOutcome } from "@prisma/client";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -32,16 +30,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   // Trigger payment action based on outcome
   if (payment?.stripePaymentIntentId && payment.status === "HELD") {
-    if (outcome === "WORKER_FAVOR" || outcome === "POSTER_FAVOR") {
-      await stripe.paymentIntents.capture(payment.stripePaymentIntentId);
-      await prisma.payment.update({ where: { id: payment.id }, data: { status: "RELEASED" } });
-    } else if (outcome === "SPLIT") {
-      const half = Math.floor(payment.amount / 2);
-      await stripe.paymentIntents.capture(payment.stripePaymentIntentId, { amount_to_capture: half });
-      await prisma.payment.update({ where: { id: payment.id }, data: { status: "RELEASED" } });
-    } else if (outcome === "DISMISSED") {
-      await stripe.paymentIntents.cancel(payment.stripePaymentIntentId);
-      await prisma.payment.update({ where: { id: payment.id }, data: { status: "VOIDED" } });
+    try {
+      const stripe = getStripeClient();
+      if (outcome === "WORKER_FAVOR" || outcome === "POSTER_FAVOR") {
+        await stripe.paymentIntents.capture(payment.stripePaymentIntentId);
+        await prisma.payment.update({ where: { id: payment.id }, data: { status: "RELEASED" } });
+      } else if (outcome === "SPLIT") {
+        const half = Math.floor(payment.amount / 2);
+        await stripe.paymentIntents.capture(payment.stripePaymentIntentId, { amount_to_capture: half });
+        await prisma.payment.update({ where: { id: payment.id }, data: { status: "RELEASED" } });
+      } else if (outcome === "DISMISSED") {
+        await stripe.paymentIntents.cancel(payment.stripePaymentIntentId);
+        await prisma.payment.update({ where: { id: payment.id }, data: { status: "VOIDED" } });
+      }
+    } catch (error) {
+      if (isStripeConfigurationError(error)) {
+        return NextResponse.json({ error: error.message }, { status: 500 });
+      }
+      throw error;
     }
   }
 

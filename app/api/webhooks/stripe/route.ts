@@ -1,9 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
+import type Stripe from "stripe";
 import { prisma } from "@/app/lib/prisma";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
-const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
+import { getStripeClient, getStripeWebhookSecret, isStripeConfigurationError } from "@/app/lib/stripe";
 
 export async function POST(req: NextRequest) {
   const body = await req.text();
@@ -15,8 +13,11 @@ export async function POST(req: NextRequest) {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(body, sig, webhookSecret);
-  } catch {
+    event = getStripeClient().webhooks.constructEvent(body, sig, getStripeWebhookSecret());
+  } catch (error) {
+    if (isStripeConfigurationError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
     return NextResponse.json({ error: "Webhook signature verification failed" }, { status: 400 });
   }
 

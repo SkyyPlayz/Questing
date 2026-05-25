@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import Stripe from "stripe";
+import type Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
+import { getStripeClient, isStripeConfigurationError } from "@/app/lib/stripe";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -29,26 +28,35 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   const { action, amount } = await req.json();
 
-  if (action === "capture") {
-    await stripe.paymentIntents.capture(payment.stripePaymentIntentId);
-    const updated = await prisma.payment.update({
-      where: { id },
-      data: { status: "RELEASED" },
-    });
-    return NextResponse.json(updated);
-  }
+  try {
+    const stripe = getStripeClient();
 
-  if (action === "refund") {
-    const refundParams: Stripe.RefundCreateParams = {
-      payment_intent: payment.stripePaymentIntentId,
-    };
-    if (amount) refundParams.amount = Math.round(amount);
-    await stripe.refunds.create(refundParams);
-    const updated = await prisma.payment.update({
-      where: { id },
-      data: { status: "REFUNDED" },
-    });
-    return NextResponse.json(updated);
+    if (action === "capture") {
+      await stripe.paymentIntents.capture(payment.stripePaymentIntentId);
+      const updated = await prisma.payment.update({
+        where: { id },
+        data: { status: "RELEASED" },
+      });
+      return NextResponse.json(updated);
+    }
+
+    if (action === "refund") {
+      const refundParams: Stripe.RefundCreateParams = {
+        payment_intent: payment.stripePaymentIntentId,
+      };
+      if (amount) refundParams.amount = Math.round(amount);
+      await stripe.refunds.create(refundParams);
+      const updated = await prisma.payment.update({
+        where: { id },
+        data: { status: "REFUNDED" },
+      });
+      return NextResponse.json(updated);
+    }
+  } catch (error) {
+    if (isStripeConfigurationError(error)) {
+      return NextResponse.json({ error: error.message }, { status: 500 });
+    }
+    throw error;
   }
 
   return NextResponse.json({ error: "action must be capture or refund" }, { status: 400 });
