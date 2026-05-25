@@ -1,0 +1,19 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "nodenext",
+    "moduleResolution": "nodenext",
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "strict": true,
+    "outDir": "/tmp/questing-unit-tests"
+  },
+  "include": [
+    "tests/paymentAmount.test.ts",
+    "tests/activeJobsQuery.test.ts",
+    "tests/checkinAuth.test.ts",
+    "app/lib/paymentAmount.ts",
+    "app/lib/activeJobsQuery.ts",
+    "app/lib/checkinAuth.ts"
+  ]
+}
