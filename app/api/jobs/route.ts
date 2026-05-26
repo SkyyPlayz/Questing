@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { validateJobCreateInput } from "@/app/lib/jobInputValidation";
 import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
 
@@ -32,12 +33,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Only posters can create jobs" }, { status: 403 });
   }
 
-  const body = await req.json();
-  const { title, description, category, location, payRate, payUnit, startDate, endDate, publish } = body;
-
-  if (!title || !description || !category || !location || !payRate) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  const validation = validateJobCreateInput(await req.json());
+  if (!validation.ok) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
   }
+  const { title, description, category, location, payRate, payUnit, startDate, endDate, publish } =
+    validation.data;
 
   const job = await prisma.job.create({
     data: {
@@ -45,10 +46,10 @@ export async function POST(req: NextRequest) {
       description,
       category,
       location,
-      payRate: parseFloat(payRate),
-      payUnit: payUnit || "hour",
-      startDate: startDate ? new Date(startDate) : null,
-      endDate: endDate ? new Date(endDate) : null,
+      payRate,
+      payUnit,
+      startDate,
+      endDate,
       status: publish ? "OPEN" : "DRAFT",
       posterId: user.id,
     },
