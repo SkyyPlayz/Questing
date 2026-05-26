@@ -21,13 +21,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Only workers can initiate background check payment" }, { status: 403 });
   }
 
-  // Check if worker already paid background check fee
+  // Check if worker already has an active or completed background check fee.
   const existingFee = await prisma.backgroundCheckFee.findFirst({
-    where: { workerId: user.id, status: { notIn: ["PENDING", "VOIDED"] } },
+    where: { workerId: user.id, status: { notIn: ["VOIDED"] } },
+    orderBy: { createdAt: "desc" },
   });
   if (existingFee) {
+    const isPending = existingFee.status === "PENDING";
     return NextResponse.json({
-      error: "Background check fee already paid",
+      error: isPending ? "Background check payment already pending" : "Background check fee already paid",
       existingFee: { status: existingFee.status, amount: existingFee.amount },
     }, { status: 409 });
   }
@@ -37,6 +39,9 @@ export async function POST(req: NextRequest) {
 
   const checkoutSession = await stripe.checkout.sessions.create({
     mode: "payment",
+    payment_intent_data: {
+      metadata: { workerId: user.id, backgroundCheckFee: "true" },
+    },
     line_items: [
       {
         price_data: {
@@ -60,6 +65,7 @@ export async function POST(req: NextRequest) {
       workerId: user.id,
       amount: feeCents,
       status: "PENDING",
+      stripeCheckoutSessionId: checkoutSession.id,
       stripePaymentIntentId: checkoutSession.payment_intent as string || null,
     },
   });

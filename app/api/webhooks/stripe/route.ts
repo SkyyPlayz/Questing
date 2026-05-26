@@ -36,7 +36,7 @@ export async function POST(req: NextRequest) {
       // Handle background check fee checkout
       if (session.payment_intent && session.metadata?.workerId) {
         await prisma.backgroundCheckFee.updateMany({
-          where: { workerId: session.metadata.workerId, status: "PENDING" },
+          where: { stripeCheckoutSessionId: session.id, status: "PENDING" },
           data: {
             stripePaymentIntentId: session.payment_intent as string,
             status: "PAID",
@@ -99,7 +99,7 @@ export async function POST(req: NextRequest) {
       if (pi.metadata?.workerId) {
         // Worker's background check payment failed — void the fee record
         await prisma.backgroundCheckFee.updateMany({
-          where: { workerId: pi.metadata.workerId, status: "PENDING" },
+          where: { stripePaymentIntentId: pi.id, status: "PENDING" },
           data: { status: "VOIDED" },
         });
       }
