@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { validateJobCreateInput } from "@/app/lib/jobInputValidation";
 import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
 
@@ -33,11 +34,13 @@ export async function POST(req: NextRequest) {
   }
 
   const body = await req.json();
-  const { title, description, category, location, payRate, payUnit, startDate, endDate, publish, fcfsMode, fcfsTimeoutMinutes, locationLat, locationLng } = body;
-
-  if (!title || !description || !category || !location || !payRate) {
-    return NextResponse.json({ error: "Missing required fields" }, { status: 400 });
+  const validation = validateJobCreateInput(body);
+  if (!validation.ok) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
   }
+  const { fcfsMode, fcfsTimeoutMinutes, locationLat, locationLng } = body;
+  const { title, description, category, location, payRate, payUnit, startDate, endDate, publish } =
+    validation.data;
 
   const job = await prisma.job.create({
     data: {
@@ -45,10 +48,10 @@ export async function POST(req: NextRequest) {
       description,
       category,
       location,
-      payRate: parseFloat(payRate),
-      payUnit: payUnit || "hour",
-      startDate: startDate ? new Date(startDate) : null,
-      endDate: endDate ? new Date(endDate) : null,
+      payRate,
+      payUnit,
+      startDate,
+      endDate,
       status: publish ? "OPEN" : "DRAFT",
       posterId: user.id,
       fcfsMode: fcfsMode !== undefined ? fcfsMode : true,

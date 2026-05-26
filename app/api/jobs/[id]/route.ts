@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
+import { validateJobUpdateInput } from "@/app/lib/jobInputValidation";
 import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
 import { awardXP } from "@/app/lib/xp";
@@ -66,7 +67,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   const body = await req.json();
-  const { status, title, description, category, location, payRate, payUnit, startDate, endDate } = body;
+  const { status } = body;
 
   // Validate status transitions
   const validTransitions: Record<JobStatus, JobStatus[]> = {
@@ -87,18 +88,19 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
   }
 
+  const validation = validateJobUpdateInput(body, {
+    startDate: job.startDate,
+    endDate: job.endDate,
+  });
+  if (!validation.ok) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+
   const updated = await prisma.job.update({
     where: { id },
     include: { payment: true },
     data: {
-      ...(title && { title }),
-      ...(description && { description }),
-      ...(category && { category }),
-      ...(location && { location }),
-      ...(payRate !== undefined && { payRate: parseFloat(payRate) }),
-      ...(payUnit && { payUnit }),
-      ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
-      ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
+      ...validation.data,
       ...(status && { status: status as JobStatus }),
     },
   });
