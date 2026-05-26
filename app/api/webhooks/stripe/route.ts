@@ -84,11 +84,11 @@ export async function POST(req: NextRequest) {
       if (charge.payment_intent) {
         await prisma.payment.updateMany({
           where: { stripePaymentIntentId: charge.payment_intent as string },
-          data: { status: "REFUNDED" },
+          data: { status: charge.refunded ? "REFUNDED" : "RELEASED" },
         });
         await prisma.backgroundCheckFee.updateMany({
           where: { stripePaymentIntentId: charge.payment_intent as string },
-          data: { status: "REFUNDED" },
+          data: { status: charge.refunded ? "REFUNDED" : "PAID" },
         });
       }
       break;

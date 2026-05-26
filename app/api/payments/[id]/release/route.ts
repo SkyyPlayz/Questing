@@ -7,17 +7,20 @@ import { sendEmail, emailPaymentReleased, emailPaymentRefunded, BASE } from "@/a
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
 type Params = { params: Promise<{ id: string }> };
+type PaymentAction = "capture" | "refund";
+
+function isPaymentAction(action: unknown): action is PaymentAction {
+  return action === "capture" || action === "refund";
+}
+
+function isExpandedCharge(charge: Stripe.Refund["charge"]): charge is Stripe.Charge {
+  return typeof charge === "object" && charge !== null && charge.object === "charge";
+}
 
 async function getPlatformFeePercent() {
   const config = await prisma.adminConfig.findUnique({ where: { key: "PLATFORM_FEE_PERCENT" } });
   if (!config) return 0.10; // default 10%
   return parseFloat(config.value) || 0.10;
-}
-
-async function getBackgroundCheckFeeCents() {
-  const config = await prisma.adminConfig.findUnique({ where: { key: "BACKGROUND_CHECK_FEE_CENTS" } });
-  if (!config) return 2500; // default $25.00
-  return parseInt(config.value, 10) || 2500;
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
@@ -36,16 +39,20 @@ export async function POST(req: NextRequest, { params }: Params) {
     include: { job: true },
   });
   if (!payment) return NextResponse.json({ error: "Payment not found" }, { status: 404 });
-  if (payment.status !== "HELD") {
-    return NextResponse.json({ error: "Payment is not in HELD state" }, { status: 400 });
-  }
   if (!payment.stripePaymentIntentId) {
     return NextResponse.json({ error: "No payment intent on record" }, { status: 400 });
   }
 
   const { action, amount } = await req.json();
+  if (!isPaymentAction(action)) {
+    return NextResponse.json({ error: "action must be capture or refund" }, { status: 400 });
+  }
 
   if (action === "capture") {
+    if (payment.status !== "HELD") {
+      return NextResponse.json({ error: "Payment is not in HELD state" }, { status: 400 });
+    }
+
     // Calculate and record platform fee
     const feePercent = await getPlatformFeePercent();
     const platformFeeCents = Math.round(payment.amount * feePercent);
@@ -107,14 +114,30 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   if (action === "refund") {
+    if (!["HELD", "RELEASED"].includes(payment.status)) {
+      return NextResponse.json({ error: "Payment is not refundable" }, { status: 400 });
+    }
+
+    const refundAmount = amount === undefined ? undefined : Math.round(Number(amount));
+    if (refundAmount !== undefined && (!Number.isFinite(refundAmount) || refundAmount <= 0)) {
+      return NextResponse.json({ error: "amount must be a positive number of cents" }, { status: 400 });
+    }
+    if (refundAmount !== undefined && refundAmount > payment.amount) {
+      return NextResponse.json({ error: "amount cannot exceed payment amount" }, { status: 400 });
+    }
+
     const refundParams: Stripe.RefundCreateParams = {
       payment_intent: payment.stripePaymentIntentId,
+      expand: ["charge"],
     };
-    if (amount) refundParams.amount = Math.round(amount);
-    await stripe.refunds.create(refundParams);
+    if (refundAmount !== undefined) refundParams.amount = refundAmount;
+    const refund = await stripe.refunds.create(refundParams);
+    const isFullyRefunded = isExpandedCharge(refund.charge)
+      ? refund.charge.refunded
+      : refundAmount === undefined || refundAmount >= payment.amount;
     const updated = await prisma.payment.update({
       where: { id },
-      data: { status: "REFUNDED" },
+      data: { status: isFullyRefunded ? "REFUNDED" : payment.status },
     });
 
     // Notify worker and poster about refund
@@ -132,7 +155,7 @@ export async function POST(req: NextRequest, { params }: Params) {
         ...emailPaymentRefunded({
           workerName: acceptedApp.worker.name ?? "Worker",
           jobTitle: payment.job.title,
-          amount: payment.amount,
+          amount: refund.amount,
         }),
       });
     }
@@ -141,13 +164,11 @@ export async function POST(req: NextRequest, { params }: Params) {
         to: { email: poster.email, name: poster.name ?? undefined },
         subject: `Payment refunded for "${payment.job.title}"`,
         html: BASE.replace("{title}", "Payment Refunded").replace("{body}",
-          `Hi ${poster.name ?? "there"},\n\nPayment for "${payment.job.title}" has been refunded.\n\nAmount: $${(payment.amount / 100).toFixed(2)}\n\nThe quest is now fully settled.`
+          `Hi ${poster.name ?? "there"},\n\nPayment for "${payment.job.title}" has been refunded.\n\nAmount: $${(refund.amount / 100).toFixed(2)}\n\nThe quest is now fully settled.`
         ),
       });
     }
 
-    return NextResponse.json(updated);
+    return NextResponse.json({ payment: updated, refund: { id: refund.id, amount: refund.amount, status: refund.status, fullyRefunded: isFullyRefunded } });
   }
-
-  return NextResponse.json({ error: "action must be capture or refund" }, { status: 400 });
 }
