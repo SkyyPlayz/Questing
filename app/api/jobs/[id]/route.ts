@@ -4,7 +4,7 @@ import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
 import { awardXP } from "@/app/lib/xp";
-import { sendEmail, emailJobCompleted, emailPaymentReleased, emailDisputeOpened, BASE } from "@/app/lib/email";
+import { sendEmail, emailJobCompleted, emailPaymentReleased, emailDisputeOpened, renderEmail } from "@/app/lib/email";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -140,7 +140,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       await sendEmail({
         to: { email: poster?.email ?? "", name: poster?.name ?? undefined },
         subject: `Quest completed! "${updated.title}"`,
-        html: BASE.replace("{title}", "Quest Completed").replace("{body}",
+        html: renderEmail("Quest Completed",
           `Hi ${poster?.name ?? "there"},\n\n"${updated.title}" has been completed by ${acceptedApp.worker.name ?? "the worker"}.\n\nBoth parties can now rate each other. Check your dashboard for details.`
         ),
       });
@@ -184,7 +184,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         await sendEmail({
           to: { email: poster?.email ?? "", name: poster?.name ?? undefined },
           subject: `Payment released for "${updated.title}"`,
-          html: BASE.replace("{title}", "Payment Released").replace("{body}",
+          html: renderEmail("Payment Released",
             `Hi ${poster?.name ?? "there"},\n\nPayment for "${updated.title}" has been released to ${acceptedApp.worker.name ?? "the worker"}.\n\nAmount: $${(updated.payment.amount / 100).toFixed(2)}\n\nThe quest is now fully settled.`
           ),
         });

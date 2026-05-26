@@ -121,6 +121,7 @@ model User {
   backgroundCheckFees BackgroundCheckFee[]
   jobCheckIns     JobCheckIn[]       @relation("WorkerCheckIns")
   sentMessages    ChatMessage[]      @relation("MessageSender")
+  privateChatThreads ChatThread[]     @relation("PrivateChatWorker")
   xpTransactions  XPTransaction[]    @relation("UserXpTransactions")
   userLevel       UserLevel?
 }
@@ -386,13 +387,16 @@ model ChatThread {
   id           String         @id @default(cuid())
   jobId        String
   threadType   ChatThreadType @default(PUBLIC_QA)
+  privateWorkerId String?
   lastMessageAt DateTime?
   job          Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  privateWorker User?          @relation("PrivateChatWorker", fields: [privateWorkerId], references: [id])
   messages     ChatMessage[]
   createdAt    DateTime       @default(now())
   updatedAt    DateTime       @updatedAt
 
   @@index([jobId, threadType])
+  @@index([jobId, threadType, privateWorkerId])
 }
 
 model ChatMessage {

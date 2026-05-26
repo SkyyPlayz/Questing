@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { auth } from "@/app/lib/auth";
+import { canAccessChatThread, canWorkerCreatePrivateThread } from "@/app/lib/chat-authorization.mjs";
+import { createChatThreadIdempotently } from "@/app/lib/chat-thread-creation.mjs";
 
 export async function GET(
   request: NextRequest,
@@ -23,9 +25,6 @@ export async function GET(
         },
         orderBy: { createdAt: "asc" },
       },
-      applications: {
-        select: { workerId: true, status: true },
-      },
     },
   });
 
@@ -33,17 +32,11 @@ export async function GET(
     return NextResponse.json({ error: "Job not found" }, { status: 404 });
   }
 
-  // Filter private threads: only poster and accepted workers can see them
-  const acceptedWorkerIds = job.applications
-    .filter((a) => a.status === "ACCEPTED" || a.status === "FCFS_ACCEPTED")
-    .map((a) => a.workerId);
-
   const visibleThreads = job.chatThreads.filter((t) => {
-    if (t.threadType === "PUBLIC_QA") return true;
-    if (t.threadType === "PRIVATE") {
-      return user?.id === job.posterId || acceptedWorkerIds.includes(user?.id ?? "");
-    }
-    return false;
+    return canAccessChatThread(
+      { threadType: t.threadType, posterId: job.posterId, privateWorkerId: t.privateWorkerId },
+      user?.id
+    );
   });
 
   return NextResponse.json({ threads: visibleThreads });
@@ -92,19 +85,6 @@ export async function POST(
     );
   }
 
-  // Prevent duplicate PUBLIC_QA threads
-  if (threadType === "PUBLIC_QA") {
-    const existing = await prisma.chatThread.findFirst({
-      where: { jobId: id, threadType: "PUBLIC_QA" },
-    });
-    if (existing) {
-      return NextResponse.json(
-        { error: "A public Q&A thread already exists for this job" },
-        { status: 409 }
-      );
-    }
-  }
-
   // For PRIVATE threads, workerId is required
   if (threadType === "PRIVATE") {
     if (!workerId) {
@@ -121,44 +101,29 @@ export async function POST(
         { status: 400 }
       );
     }
-    if (application.status !== "ACCEPTED" && application.status !== "FCFS_ACCEPTED") {
+    if (!canWorkerCreatePrivateThread(application)) {
       return NextResponse.json(
         { error: "Worker must be ACCEPTED or FCFS_ACCEPTED to have a private thread" },
         { status: 400 }
       );
     }
-
-    // Prevent duplicate private threads between same poster-worker pair
-    const existing = await prisma.chatThread.findFirst({
-      where: {
-        jobId: id,
-        threadType: "PRIVATE",
-        messages: {
-          some: { senderId: user.id },
-        },
-      },
-    });
-    if (existing) {
-      return NextResponse.json(
-        { error: "A private thread already exists between you and this worker" },
-        { status: 409 }
-      );
-    }
   }
 
-  const thread = await prisma.chatThread.create({
-    data: {
+  const { thread, created } = await createChatThreadIdempotently(
+    prisma,
+    {
       jobId: id,
       threadType,
+      workerId,
     },
-    include: {
+    {
       messages: {
         orderBy: { createdAt: "desc" },
         take: 1,
         include: { sender: { select: { id: true, name: true } } },
       },
-    },
-  });
+    }
+  );
 
-  return NextResponse.json({ thread }, { status: 201 });
+  return NextResponse.json({ thread }, { status: created ? 201 : 200 });
 }
