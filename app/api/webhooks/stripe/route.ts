@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { prisma } from "@/app/lib/prisma";
+import { recordReleasedPlatformFee } from "@/app/lib/platform-fees";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET!;
@@ -57,24 +58,10 @@ export async function POST(req: NextRequest) {
     }
 
     case "payment_intent.succeeded": {
-      // Safety net: if the API route didn't record the platform fee, capture it here
+      // Safety net: tolerate webhook/API ordering and converge on one fee row per job.
       const pi = event.data.object as Stripe.PaymentIntent;
       if (pi.metadata?.jobId) {
-        const existingFee = await prisma.platformFee.findUnique({ where: { jobId: pi.metadata.jobId } });
-        if (!existingFee) {
-          const feeConfig = await prisma.adminConfig.findUnique({ where: { key: "PLATFORM_FEE_PERCENT" } });
-          const feePercent = feeConfig ? parseFloat(feeConfig.value) || 0.10 : 0.10;
-          const platformFeeCents = Math.round(pi.amount * feePercent);
-          await prisma.platformFee.create({
-            data: {
-              jobId: pi.metadata.jobId,
-              amount: platformFeeCents,
-              type: "PLATFORM_SERVICE",
-              percent: feePercent,
-              status: "RELEASED",
-            },
-          });
-        }
+        await recordReleasedPlatformFee(pi.metadata.jobId, pi.amount);
       }
       break;
     }

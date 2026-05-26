@@ -2,9 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
-import { JobStatus } from "@prisma/client";
+import { JobStatus } from "@/app/generated/prisma/client";
 import { awardXP } from "@/app/lib/xp";
-import { sendEmail, emailJobCompleted, emailPaymentReleased, emailDisputeOpened, BASE } from "@/app/lib/email";
+import { sendEmail, emailJobCompleted, emailPaymentReleased, BASE } from "@/app/lib/email";
+import { recordReleasedPlatformFee } from "@/app/lib/platform-fees";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -150,11 +151,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (status && status !== job.status && updated.payment?.stripePaymentIntentId) {
     const pi = updated.payment.stripePaymentIntentId;
     if (status === "COMPLETED" && updated.payment.status === "HELD") {
-      // Calculate platform fee from admin-configurable rate
-      const feeConfig = await prisma.adminConfig.findUnique({ where: { key: "PLATFORM_FEE_PERCENT" } });
-      const feePercent = feeConfig ? parseFloat(feeConfig.value) || 0.10 : 0.10;
-      const platformFeeCents = Math.round(updated.payment.amount * feePercent);
-
       await stripe.paymentIntents.capture(pi);
       await prisma.payment.update({ where: { id: updated.payment.id }, data: { status: "RELEASED" } });
 
@@ -190,16 +186,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
         });
       }
 
-      // Record the platform fee
-      await prisma.platformFee.create({
-        data: {
-          jobId: updated.id,
-          amount: platformFeeCents,
-          type: "PLATFORM_SERVICE",
-          percent: feePercent,
-          status: "RELEASED",
-        },
-      });
+      await recordReleasedPlatformFee(updated.id, updated.payment.amount);
     } else if (status === "CANCELLED" && updated.payment.status === "HELD") {
       await stripe.paymentIntents.cancel(pi);
       await prisma.payment.update({ where: { id: updated.payment.id }, data: { status: "VOIDED" } });

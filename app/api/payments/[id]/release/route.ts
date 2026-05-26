@@ -3,6 +3,7 @@ import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { sendEmail, emailPaymentReleased, emailPaymentRefunded, BASE } from "@/app/lib/email";
+import { recordReleasedPlatformFee } from "@/app/lib/platform-fees";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -15,12 +16,6 @@ function isPaymentAction(action: unknown): action is PaymentAction {
 
 function isExpandedCharge(charge: Stripe.Refund["charge"]): charge is Stripe.Charge {
   return typeof charge === "object" && charge !== null && charge.object === "charge";
-}
-
-async function getPlatformFeePercent() {
-  const config = await prisma.adminConfig.findUnique({ where: { key: "PLATFORM_FEE_PERCENT" } });
-  if (!config) return 0.10; // default 10%
-  return parseFloat(config.value) || 0.10;
 }
 
 export async function POST(req: NextRequest, { params }: Params) {
@@ -53,25 +48,9 @@ export async function POST(req: NextRequest, { params }: Params) {
       return NextResponse.json({ error: "Payment is not in HELD state" }, { status: 400 });
     }
 
-    // Calculate and record platform fee
-    const feePercent = await getPlatformFeePercent();
-    const platformFeeCents = Math.round(payment.amount * feePercent);
-
     await stripe.paymentIntents.capture(payment.stripePaymentIntentId);
 
-    // Create platform fee record (only if one doesn't already exist — job completion auto-capture may have already created it)
-    const existingFee = await prisma.platformFee.findUnique({ where: { jobId: payment.jobId } });
-    if (!existingFee) {
-      await prisma.platformFee.create({
-        data: {
-          jobId: payment.jobId,
-          amount: platformFeeCents,
-          type: "PLATFORM_SERVICE",
-          percent: feePercent,
-          status: "RELEASED",
-        },
-      });
-    }
+    const platformFeeResult = await recordReleasedPlatformFee(payment.jobId, payment.amount);
 
     const updated = await prisma.payment.update({
       where: { id },
@@ -109,7 +88,11 @@ export async function POST(req: NextRequest, { params }: Params) {
 
     return NextResponse.json({
       payment: updated,
-      platformFee: { amount: platformFeeCents, percent: feePercent, alreadyExists: !!existingFee },
+      platformFee: {
+        amount: platformFeeResult.amount,
+        percent: platformFeeResult.percent,
+        alreadyExists: platformFeeResult.alreadyExists,
+      },
     });
   }
 
