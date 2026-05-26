@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { prisma } from "@/app/lib/prisma";
 import { auth } from "@/app/lib/auth";
+import { buildPublicJobsQuery } from "@/app/lib/publicJobsQuery";
 
 const CATEGORIES = ["All", "Landscaping", "Cleaning", "Moving", "Handyman", "Childcare", "Delivery", "Other"];
 
@@ -15,16 +16,7 @@ export default async function JobsPage({
   const user = session?.user as { id?: string; role?: string } | undefined;
   const sp = await searchParams;
   const category = sp.category;
-  const status = sp.status || "OPEN";
-
-  const where: Record<string, unknown> = { status };
-  if (category && category !== "All") where.category = category;
-
-  const jobs = await prisma.job.findMany({
-    where,
-    include: { poster: { select: { id: true, name: true } } },
-    orderBy: { createdAt: "desc" },
-  });
+  const jobs = await prisma.job.findMany(buildPublicJobsQuery({ category, status: sp.status }));
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-8">

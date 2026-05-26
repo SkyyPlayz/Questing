@@ -1,23 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
-import { JobStatus } from "@prisma/client";
+import { buildPublicJobsQuery } from "@/app/lib/publicJobsQuery";
 
 export async function GET(req: NextRequest) {
   const { searchParams } = req.nextUrl;
   const category = searchParams.get("category");
-  const status = searchParams.get("status") as JobStatus | null;
+  const status = searchParams.get("status");
 
-  const where: Record<string, unknown> = {};
-  if (category) where.category = category;
-  if (status) where.status = status;
-  else where.status = "OPEN";
-
-  const jobs = await prisma.job.findMany({
-    where,
-    include: { poster: { select: { id: true, name: true } } },
-    orderBy: { createdAt: "desc" },
-  });
+  const jobs = await prisma.job.findMany(buildPublicJobsQuery({ category, status }));
 
   return NextResponse.json(jobs);
 }
