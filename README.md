@@ -16,6 +16,10 @@ bun dev
 
 Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
 
+## Planning docs
+
+- [Questing roadmap for owner review](docs/planning/questing-roadmap-2026-06-07.md) captures the Omi conversation follow-up, Beta/v1/v2/full-release stages, and the proposed parent/child GitHub issue rollout for owner approval before broad issue creation.
+
 You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
 
 This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
