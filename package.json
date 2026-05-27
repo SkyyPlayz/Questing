@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "rm -rf /tmp/questing-unit-tests && tsc tests/paymentAmount.test.ts tests/activeJobsQuery.test.ts app/lib/paymentAmount.ts app/lib/activeJobsQuery.ts --module commonjs --target es2022 --outDir /tmp/questing-unit-tests --esModuleInterop --moduleResolution node --skipLibCheck && node --test /tmp/questing-unit-tests/tests/*.test.js"
+    "test": "rm -rf /tmp/questing-unit-tests && tsc tests/paymentAmount.test.ts tests/activeJobsQuery.test.ts tests/userStatus.test.ts app/lib/paymentAmount.ts app/lib/activeJobsQuery.ts app/lib/userStatus.ts --module commonjs --target es2022 --outDir /tmp/questing-unit-tests --esModuleInterop --moduleResolution node --skipLibCheck && node --test /tmp/questing-unit-tests/tests/*.test.js"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",
