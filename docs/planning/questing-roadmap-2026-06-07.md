@@ -3,7 +3,10 @@
 Source issue: WEI-2141
 Planning target date: 2026-06-07
 Prepared branch intent: plans-up / owner-review branch; do not purge after review.
+
 Repo: SkyyPlayz/Questing
+
+**Owner: Gabe (Skyyplayz), not Peter. All references to the owner should be to Gabe/Skyyplayz.**
 
 ## Decision gate
 
@@ -19,34 +22,43 @@ Do not delete this branch just because the plan is pending. It is the review art
 
 ## Omi conversation inputs from 2026-05-22
 
+
+### Platform and Launch Intent
+
+**Questing is intended as a mobile app for iOS and Android, with a web version for PC users or those who do not wish to download the app. All planning, requirements, and QA must reflect this cross-platform mobile-first approach.**
+
 ### Full app review / baseline launch
+
 
 Relevant notes:
 - Run a quick full app review with a baseline launch first.
-- The app launch location should be clear so reviewers know exactly where to find it.
+- The app launch location should be clear so reviewers know exactly where to find it (on iOS/Android and web).
 - Routines should have a clear place in the product/navigation.
 - A recurring process was discussed to run every hour.
 - A new branch was requested specifically for this work.
 - The launch had some issues and needs follow-up.
 
+
 Planning interpretation:
-- Before broad feature work, establish a reproducible baseline launch checklist.
+- Before broad feature work, establish a reproducible baseline launch checklist for all platforms (iOS, Android, web).
 - Treat launch/routing confusion as a first-class planning item.
 - Create QA issues that document the exact route, command, environment, and observed failures.
 
 ### Mac/front-end/company website bug-fix planning
 
+
 Relevant notes:
 - Questing is being used as a bug-hunt / troubleshooting project.
-- The work is to help Peter and his practice while respecting that Peter/Sky is the product owner.
+- The work is to help the team, but Gabe/Skyyplayz is the product owner. All owner review and product decisions are by Gabe/Skyyplayz.
 - Current code may run on Linux, but Mac support matters; a Mac-specific version may be needed.
 - Detailed requirements should live in GitHub planning documentation before coding.
-- There are roughly 14 initial issues, but the plan should leave surplus work for Peter's team.
+- There are roughly 14 initial issues, but the plan should leave surplus work for the team.
 - Goal: close one issue at a time, while creating enough structured work for the owner/company to review.
+
 
 Planning interpretation:
 - Existing security/bug issues #1-#14 are the immediate Beta stabilization pool.
-- The backend/code-quality company should not unilaterally define product feel; owner review is required.
+- The backend/code-quality company should not unilaterally define product feel; owner review is required. All owner review is by Gabe/Skyyplayz.
 - Planning should separate backend/security/code-quality work from product/feel/UX decisions.
 
 ### Front-end agent setup / file-location notes
@@ -65,17 +77,20 @@ Planning interpretation:
 
 ## Ownership model
 
+
 Backend/code-quality company focus:
 - Security, privacy, data access control, validation, tests, build reliability, CI, GitHub issue structure, and project hygiene.
 - Produce concrete bug reports and implementation issues with acceptance criteria.
 - Review diffs, require tests, and maintain branch hygiene.
+- **All branches must pass all 3 CI tests before merging. This is required everywhere it is relevant.**
 
 Owner/front-end/product focus:
 - Product feel, final workflow decisions, copy, launch positioning, UX priorities, and Mac-specific product direction.
 - Approve the issue rollout before the 60+ issue plan is created.
 
+
 Shared rule:
-- Work as a team. The backend/code-quality company can propose structure and safe implementation paths, but owner approval is required for product-direction commitments.
+- Work as a team. The backend/code-quality company can propose structure and safe implementation paths, but owner approval is required for product-direction commitments. All owner approvals are by Gabe/Skyyplayz.
 
 ## GitHub Project structure
 
@@ -98,20 +113,23 @@ Suggested project fields:
 
 ### Stage A: Beta stabilization
 
+
 Goal:
-Make the current app safe enough to test and demo on Mac and Linux without obvious data leaks, auth gaps, or broken launch paths.
+Make the current app safe enough to test and demo on iOS, Android, Mac, Linux, and web without obvious data leaks, auth gaps, or broken launch paths.
+
 
 Exit criteria:
 - Existing critical bug/security issues #1-#14 are triaged, linked to parent issues, and prioritized.
-- Baseline launch can be reproduced on Mac.
+- Baseline launch can be reproduced on iOS, Android, Mac, Linux, and web.
 - Missing environment variables fail gracefully or are documented.
 - Authentication and authorization bugs have tests.
 - Public APIs do not leak private job/user data.
 
 ### Stage B: Version 1
 
+
 Goal:
-Deliver the first owner-approved usable product shape with core jobs, onboarding, profile, payments, safety, and admin workflows.
+Deliver the first owner-approved usable product shape with core jobs, onboarding, profile, payments, safety, and admin workflows, available as a mobile app (iOS/Android) and web version.
 
 Exit criteria:
 - User roles and permissions are explicit.
@@ -122,8 +140,9 @@ Exit criteria:
 
 ### Stage C: Version 2
 
+
 Goal:
-Improve UX, automation, agent-assisted intake, routines, notifications, and operational tooling.
+Improve UX, automation, agent-assisted intake, routines, notifications, and operational tooling for mobile and web users.
 
 Exit criteria:
 - Hourly/recurring intake process is reliable and observable.
@@ -133,8 +152,9 @@ Exit criteria:
 
 ### Stage D: Full release
 
+
 Goal:
-Prepare the app for broader public use with security hardening, monitoring, accessibility, compliance, and release operations.
+Prepare the app for broader public use with security hardening, monitoring, accessibility, compliance, and release operations, ensuring mobile and web readiness.
 
 Exit criteria:
 - Security review complete.
@@ -278,6 +298,11 @@ The following is the proposed issue rollout. Parent issues should be created fir
 94. Plan security review.
 95. Plan full-release go/no-go checklist.
 
+
+## CI Requirements
+
+**All branches must pass all 3 CI tests before merging. This applies to every relevant workflow, branch, and PR.**
+
 ## Existing issue mapping
 
 Known open GitHub bug issues at planning time:
@@ -296,6 +321,11 @@ Known open GitHub bug issues at planning time:
 - #14 Invalid job status query values can crash jobs page/API filters.
 
 These should be linked under the Beta stabilization parent groups instead of recreated as duplicates.
+
+
+## Owner and Approval
+
+**All owner review and approval is by Gabe (Skyyplayz).**
 
 ## Approval checklist before issue creation
 
