@@ -1,18 +1,19 @@
 "use client";
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { buildRegistrationSuccessMessage } from "@/app/lib/registrationResult";
 
 export default function RegisterPage() {
-  const router = useRouter();
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "WORKER" });
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [loading, setLoading] = useState(false);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     setLoading(true);
     setError("");
+    setSuccess("");
     const res = await fetch("/api/users", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -23,7 +24,8 @@ export default function RegisterPage() {
       const data = await res.json();
       setError(data.error || "Registration failed");
     } else {
-      router.push("/login");
+      setSuccess(buildRegistrationSuccessMessage(form.email));
+      setForm({ name: "", email: "", password: "", role: form.role });
     }
   }
 
@@ -32,6 +34,17 @@ export default function RegisterPage() {
       <div className="bg-white p-8 rounded-lg shadow w-full max-w-md">
         <h1 className="text-2xl font-bold mb-6">Create Account</h1>
         {error && <p className="text-red-600 mb-4 text-sm">{error}</p>}
+        {success && (
+          <div className="mb-4 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+            <p>{success}</p>
+            <p className="mt-2">
+              Already verified?{" "}
+              <Link href="/login" className="font-medium text-green-900 underline">
+                Sign in
+              </Link>
+            </p>
+          </div>
+        )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
             <label className="block text-sm font-medium mb-1">Name</label>
