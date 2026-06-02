@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { sendEmail, emailDisputeOpened } from "@/app/lib/email";
+import { acceptedApplicationStatusWhere } from "@/app/lib/acceptedApplicationStatuses";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -14,7 +15,10 @@ export async function POST(req: NextRequest, { params }: Params) {
   const job = await prisma.job.findUnique({
     where: { id: jobId },
     include: {
-      applications: { where: { status: "ACCEPTED" }, include: { worker: { select: { id: true, name: true, email: true } } } },
+      applications: {
+        where: { status: acceptedApplicationStatusWhere() },
+        include: { worker: { select: { id: true, name: true, email: true } } },
+      },
       poster: { select: { id: true, name: true, email: true } },
     },
   });
@@ -38,7 +42,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   ]);
 
   // Notify the other party (recipient) about the dispute
-  const acceptedApp = job.applications.find((a) => a.status === "ACCEPTED");
+  const acceptedApp = job.applications[0];
   const raiser = await prisma.user.findUnique({
     where: { id: user.id },
     select: { name: true, email: true },
