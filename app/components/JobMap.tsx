@@ -3,8 +3,16 @@
 import { useEffect, useState } from "react";
 import Link from "next/link";
 
+type MapJob = {
+  id: string;
+  tier: string;
+  title: string;
+  payRate: number;
+  xpReward: number;
+};
+
 export default function JobMap() {
-  const [jobs, setJobs] = useState<any[]>([]);
+  const [jobs, setJobs] = useState<MapJob[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {

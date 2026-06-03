@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 
@@ -15,7 +16,7 @@ export async function GET(req: NextRequest) {
 
   const offset = (page - 1) * limit;
 
-  let whereClause: any = {};
+  let whereClause: Prisma.PlatformFeeWhereInput = {};
   if (type === "platform") whereClause = { type: "PLATFORM_SERVICE" };
   if (type === "background_check") whereClause = {}; // BG check fees use a separate model
 

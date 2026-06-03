@@ -257,7 +257,7 @@ export default async function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {ledger.platformFees.map((f: any) => (
+                    {ledger.platformFees.map((f) => (
                       <tr key={f.id} className="border-b">
                         <td className="py-2 px-3 font-medium">{f.jobTitle}</td>
                         <td className="py-2 px-3">{(f.percent * 100).toFixed(1)}%</td>
@@ -296,7 +296,7 @@ export default async function AdminPage() {
                     </tr>
                   </thead>
                   <tbody>
-                    {ledger.bgCheckFees.map((f: any) => (
+                    {ledger.bgCheckFees.map((f) => (
                       <tr key={f.id} className="border-b">
                         <td className="py-2 px-3 font-mono text-xs">{f.workerId}</td>
                         <td className="py-2 px-3 text-right">${(f.amount / 100).toFixed(2)}</td>

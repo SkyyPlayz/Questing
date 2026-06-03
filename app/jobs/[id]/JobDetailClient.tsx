@@ -520,7 +520,7 @@ export default function JobDetailClient({
           <div className="border-t pt-4 mt-4">
             <h2 className="font-semibold mb-3 text-red-700">🚨 Emergency SOS</h2>
             <p className="text-sm text-gray-600 mb-3">
-              If you're in danger, press SOS to log a high-severity incident and notify your emergency contact and admin.
+              If you&apos;re in danger, press SOS to log a high-severity incident and notify your emergency contact and admin.
             </p>
             {sosResult && (
               <div className="bg-red-50 border border-red-200 rounded p-3 mb-3 text-sm text-red-800">
