@@ -3,21 +3,17 @@ import { prisma } from "@/app/lib/prisma";
 import bcrypt from "bcryptjs";
 import { awardXP } from "@/app/lib/xp";
 import { escapeHtml, sendEmail, validateEmailUrl } from "@/app/lib/email";
-import { normalizeEmail } from "@/app/lib/email-normalization";
 import { replaceVerificationToken } from "@/app/lib/auth-tokens";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
   const { name, email, password, role } = await req.json();
-  const normalizedEmail = normalizeEmail(email);
 
-  if (!normalizedEmail || !password || !name) {
+  if (!email || !password || !name) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }
 
-  const existing = await prisma.user.findFirst({
-    where: { email: { equals: normalizedEmail, mode: "insensitive" } },
-  });
+  const existing = await prisma.user.findUnique({ where: { email } });
   if (existing) {
     return NextResponse.json({ error: "Email already in use" }, { status: 409 });
   }
@@ -27,7 +23,7 @@ export async function POST(req: NextRequest) {
 
   const passwordHash = await bcrypt.hash(password, 10);
   const user = await prisma.user.create({
-    data: { name, email: normalizedEmail, passwordHash, role: userRole },
+    data: { name, email, passwordHash, role: userRole },
     select: { id: true, email: true, name: true, role: true },
   });
 
@@ -37,9 +33,9 @@ export async function POST(req: NextRequest) {
   // Send email verification
   const verifyToken = crypto.randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24 hours
-  await replaceVerificationToken(`verify:${normalizedEmail}`, verifyToken, expires);
+  await replaceVerificationToken(`verify:${email}`, verifyToken, expires);
 
-  const verifyUrl = validateEmailUrl(`${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/verify-email?token=${verifyToken}&email=${encodeURIComponent(normalizedEmail)}`);
+  const verifyUrl = validateEmailUrl(`${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/verify-email?token=${verifyToken}&email=${encodeURIComponent(email)}`);
   await sendEmail({
     to: { email: user.email, name: user.name ?? undefined },
     subject: "Job Quest — Verify your email address",
