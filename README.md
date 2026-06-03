@@ -2,7 +2,17 @@ This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-
 
 ## Getting Started
 
-First, run the development server:
+Create a local environment file and bootstrap the database before starting the app:
+
+```bash
+cp .env.example .env.local
+openssl rand -base64 32 # use this value for NEXTAUTH_SECRET
+npx prisma migrate dev
+```
+
+The `/jobs` route requires `DATABASE_URL` and `NEXTAUTH_SECRET`. Without them, the page shows a local setup diagnostic instead of a generic render error.
+
+Then run the development server:
 
 ```bash
 npm run dev

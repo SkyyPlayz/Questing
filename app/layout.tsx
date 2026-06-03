@@ -5,6 +5,7 @@ import "./globals.css";
 import "leaflet/dist/leaflet.css";
 import Nav from "./components/Nav";
 import { auth } from "./lib/auth";
+import { getMissingServerEnv } from "./lib/env";
 import { prisma } from "./lib/prisma";
 
 const geist = Geist({ variable: "--font-geist-sans", subsets: ["latin"] });
@@ -15,11 +16,12 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const session = await auth();
+  const hasServerSetup = getMissingServerEnv().length === 0;
+  const session = hasServerSetup ? await auth() : null;
   const user = session?.user as { id?: string; role?: string } | undefined;
 
   let showOnboardingBanner = false;
-  if (user?.id && user.role === "WORKER") {
+  if (hasServerSetup && user?.id && user.role === "WORKER") {
     const profile = await prisma.workerProfile.findUnique({ where: { userId: user.id } });
     showOnboardingBanner = !profile?.onboardingComplete;
   }

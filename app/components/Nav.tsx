@@ -1,9 +1,10 @@
 import Link from "next/link";
 import { auth, signOut } from "@/app/lib/auth";
+import { getMissingServerEnv } from "@/app/lib/env";
 import MobileNavToggle from "./MobileNavToggle";
 
 export default async function Nav() {
-  const session = await auth();
+  const session = getMissingServerEnv().length === 0 ? await auth() : null;
   const user = session?.user as { name?: string | null; role?: string } | undefined;
 
   const links = user ? (
