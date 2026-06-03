@@ -72,22 +72,20 @@ export async function POST(req: NextRequest, { params }: Params) {
     }, { status: 400 });
   }
 
+  const pendingAppsPreserved = job.applications.filter((a) => a.status === "PENDING").length;
+
   // Unlock the job:
-  // 1. Reject the FCFS application
-  // 2. Reject all other pending applications (they'll need to re-apply)
-  // 3. Reopen the job to OPEN status
+  // 1. Reject only the expired FCFS application
+  // 2. Preserve pending applications so the poster can consider the queue
+  // 3. Reopen the job and clear the FCFS lock state
   await prisma.$transaction([
     prisma.application.update({
       where: { id: fcfsApp.id },
       data: { status: "REJECTED" },
     }),
-    prisma.application.updateMany({
-      where: { jobId: id, status: "PENDING" },
-      data: { status: "WITHDRAWN" },
-    }),
     prisma.job.update({
       where: { id },
-      data: { status: "OPEN" },
+      data: { status: "OPEN", fcfsLockedAt: null },
     }),
   ]);
 
@@ -95,7 +93,7 @@ export async function POST(req: NextRequest, { params }: Params) {
     unlocked: true,
     jobStatus: "OPEN",
     fcfsAppRejected: fcfsApp.id,
-    pendingAppsWithdrawn: job.applications.filter((a) => a.status === "PENDING").length,
+    pendingAppsPreserved,
     timeoutMinutes,
     elapsedMinutes: Math.round(elapsedMinutes),
   }, { status: 200 });

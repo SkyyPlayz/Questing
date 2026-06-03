@@ -4,6 +4,7 @@ import { prisma } from "@/app/lib/prisma";
 import { awardXP } from "@/app/lib/xp";
 import { sendEmail, emailApplicationSubmitted, emailApplicationAccepted, emailApplicationRejected } from "@/app/lib/email";
 import { createChatThreadIdempotently } from "@/app/lib/chat-thread-creation.mjs";
+import { canManageApplicationAction, isApplicationAction } from "@/app/lib/applicationActionAuthorization";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -164,8 +165,8 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const job = await prisma.job.findUnique({ where: { id } });
   if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
 
-  if (job.posterId !== user.id && user.role !== "ADMIN") {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+  if (!isApplicationAction(action)) {
+    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
 
   const application = await prisma.application.findUnique({
@@ -173,6 +174,16 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   });
   if (!application || application.jobId !== id) {
     return NextResponse.json({ error: "Application not found" }, { status: 404 });
+  }
+
+  if (!canManageApplicationAction({
+    action,
+    userId: user.id,
+    userRole: user.role,
+    jobPosterId: job.posterId,
+    applicationWorkerId: application.workerId,
+  })) {
+    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
   if (action === "accept") {
@@ -254,10 +265,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       });
     }
   } else if (action === "withdraw") {
-    // Worker can withdraw their pending application
-    if (application.workerId !== user.id) {
-      return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-    }
     if (application.status !== "PENDING") {
       return NextResponse.json({ error: "Cannot withdraw — application not pending" }, { status: 400 });
     }
@@ -265,8 +272,6 @@ export async function PATCH(req: NextRequest, { params }: Params) {
       where: { id: applicationId },
       data: { status: "WITHDRAWN" },
     });
-  } else {
-    return NextResponse.json({ error: "Invalid action" }, { status: 400 });
   }
 
   const updatedJob = await prisma.job.findUnique({
