@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { calculateRiskLevel } from "@/app/lib/riskScore";
 import { RiskLevel } from "@prisma/client";
 
 type Params = { params: Promise<{ id: string }> };
@@ -10,9 +11,7 @@ async function recomputeRiskScore(userId: string) {
     where: { reporterId: userId, status: "RESOLVED" },
   });
   const count = incidents.length;
-  let riskLevel: RiskLevel = "LOW";
-  if (count >= 3 || incidents.some((i) => i.severity === "CRITICAL")) riskLevel = "HIGH";
-  else if (count >= 1 || incidents.some((i) => i.severity === "HIGH")) riskLevel = "MEDIUM";
+  const riskLevel = calculateRiskLevel(incidents) as RiskLevel;
 
   await prisma.riskScore.upsert({
     where: { userId },
