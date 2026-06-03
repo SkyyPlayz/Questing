@@ -1,14 +1,18 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { escapeHtml, sendEmail, validateEmailUrl } from "@/app/lib/email";
+import { normalizeEmail } from "@/app/lib/email-normalization";
 import { replaceVerificationToken } from "@/app/lib/auth-tokens";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
   const { email } = await req.json();
-  if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return NextResponse.json({ error: "Email required" }, { status: 400 });
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+  });
   // Always return 200 to avoid user enumeration
   if (!user) return NextResponse.json({ ok: true });
   if (user.emailVerified) return NextResponse.json({ ok: true, alreadyVerified: true });
@@ -16,9 +20,9 @@ export async function POST(req: NextRequest) {
   const token = crypto.randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24 hours
 
-  await replaceVerificationToken(`verify:${email}`, token, expires);
+  await replaceVerificationToken(`verify:${normalizedEmail}`, token, expires);
 
-  const verifyUrl = validateEmailUrl(`${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/verify-email?token=${token}&email=${encodeURIComponent(email)}`);
+  const verifyUrl = validateEmailUrl(`${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/verify-email?token=${token}&email=${encodeURIComponent(normalizedEmail)}`);
 
   await sendEmail({
     to: { email: user.email, name: user.name ?? undefined },
@@ -43,27 +47,34 @@ export async function POST(req: NextRequest) {
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url);
   const token = searchParams.get("token");
-  const email = searchParams.get("email");
+  const normalizedEmail = normalizeEmail(searchParams.get("email"));
 
-  if (!token || !email) {
+  if (!token || !normalizedEmail) {
     return NextResponse.json({ error: "Missing token or email" }, { status: 400 });
   }
 
   const record = await prisma.verificationToken.findUnique({
-    where: { identifier_token: { identifier: `verify:${email}`, token } },
+    where: { identifier_token: { identifier: `verify:${normalizedEmail}`, token } },
   });
 
   if (!record || record.expires < new Date()) {
     return NextResponse.json({ error: "Invalid or expired verification link" }, { status: 400 });
   }
 
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+  });
+  if (!user) {
+    return NextResponse.json({ error: "Invalid or expired verification link" }, { status: 400 });
+  }
+
   await prisma.$transaction([
     prisma.user.update({
-      where: { email },
+      where: { id: user.id },
       data: { emailVerified: new Date(), status: "ACTIVE" },
     }),
     prisma.verificationToken.delete({
-      where: { identifier_token: { identifier: `verify:${email}`, token } },
+      where: { identifier_token: { identifier: `verify:${normalizedEmail}`, token } },
     }),
   ]);
 
