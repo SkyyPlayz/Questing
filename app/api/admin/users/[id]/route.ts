@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 
 type Params = { params: Promise<{ id: string }> };
@@ -37,7 +38,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (actor.role !== "ADMIN") return NextResponse.json({ error: "Admin only" }, { status: 403 });
 
   const { id } = await params;
-  const body = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const { status, note, idVerified, backgroundCheckStatus, riskLevel, riskOverrideNote } = body;
 
   const ops: Promise<unknown>[] = [];

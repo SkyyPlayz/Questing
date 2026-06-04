@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 import { sendEmail, emailIncidentReported, renderEmail } from "@/app/lib/email";
 
@@ -8,7 +9,9 @@ export async function POST(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const user = session.user as { id: string };
 
-  const { jobId, severity, description } = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const { jobId, severity, description } = parsedBody.data;
   if (!jobId || !severity || !description) {
     return NextResponse.json({ error: "jobId, severity, and description required" }, { status: 400 });
   }

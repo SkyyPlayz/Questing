@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 import { DisputeOutcome } from "@prisma/client";
 import { sendEmail, emailDisputeResolved } from "@/app/lib/email";
@@ -16,7 +17,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (user.role !== "ADMIN") return NextResponse.json({ error: "Admin only" }, { status: 403 });
 
   const { id } = await params;
-  const { outcome, adminNote } = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const { outcome, adminNote } = parsedBody.data;
 
   const validOutcomes: DisputeOutcome[] = ["WORKER_FAVOR", "POSTER_FAVOR", "SPLIT", "DISMISSED"];
   if (!validOutcomes.includes(outcome)) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 import { RiskLevel } from "@prisma/client";
 
@@ -28,7 +29,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (user.role !== "ADMIN") return NextResponse.json({ error: "Admin only" }, { status: 403 });
 
   const { id } = await params;
-  const { action, resolution } = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const { action, resolution } = parsedBody.data;
 
   if (!["resolve", "dismiss"].includes(action)) {
     return NextResponse.json({ error: "action must be resolve or dismiss" }, { status: 400 });

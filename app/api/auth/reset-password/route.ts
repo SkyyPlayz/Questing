@@ -1,9 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 import bcrypt from "bcryptjs";
 
 export async function POST(req: NextRequest) {
-  const { email, token, password } = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const { email, token, password } = parsedBody.data;
   if (!email || !token || !password) {
     return NextResponse.json({ error: "Missing fields" }, { status: 400 });
   }

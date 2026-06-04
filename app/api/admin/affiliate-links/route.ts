@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 
@@ -30,7 +31,9 @@ export async function POST(request: Request) {
   if (user.role !== "ADMIN") return NextResponse.json({ error: "Admin only" }, { status: 403 });
 
   try {
-    const body = await request.json();
+    const parsedBody = await parseJsonBody(request);
+    if (!parsedBody.ok) return parsedBody.response;
+    const body = parsedBody.data;
     const { jobCategory, toolName, description, affiliateUrl, retailer, imageUrl } = body;
 
     if (!jobCategory || !toolName || !description || !affiliateUrl) {

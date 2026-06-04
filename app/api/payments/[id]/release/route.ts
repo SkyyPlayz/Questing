@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 import { sendEmail, emailPaymentReleased, emailPaymentRefunded, renderEmail } from "@/app/lib/email";
 
@@ -43,7 +44,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "No payment intent on record" }, { status: 400 });
   }
 
-  const { action, amount } = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const { action, amount } = parsedBody.data;
 
   if (action === "capture") {
     // Calculate and record platform fee

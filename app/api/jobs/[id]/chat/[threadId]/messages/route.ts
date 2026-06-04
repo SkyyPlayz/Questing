@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { sendEmail, emailNewChatMessage, BASE } from "@/app/lib/email";
 import { canAccessChatThread } from "@/app/lib/chat-authorization.mjs";
 
@@ -55,7 +56,9 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json();
+  const parsedBody = await parseJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const { content } = body;
 
   if (!content || content.trim().length === 0) {

@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { createIntakeRun } from "@/app/lib/github-intake";
 
 export async function POST(req: NextRequest) {
@@ -9,7 +10,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await req.json().catch(() => ({}));
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const run = await createIntakeRun({
     source: "scheduled-cron",
     dryRun: true,

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 import { JobStatus } from "@prisma/client";
 
@@ -32,7 +33,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Only posters can create jobs" }, { status: 403 });
   }
 
-  const body = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const { title, description, category, location, payRate, payUnit, startDate, endDate, publish, fcfsMode, fcfsTimeoutMinutes, locationLat, locationLng } = body;
 
   if (!title || !description || !category || !location || !payRate) {

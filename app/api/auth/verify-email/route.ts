@@ -1,11 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 import { escapeHtml, sendEmail, validateEmailUrl } from "@/app/lib/email";
 import { replaceVerificationToken } from "@/app/lib/auth-tokens";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
-  const { email } = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const { email } = parsedBody.data;
   if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
 
   const user = await prisma.user.findUnique({ where: { email } });

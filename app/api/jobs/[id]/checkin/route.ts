@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 import { awardXP } from "@/app/lib/xp";
 import { sendEmail, emailIncidentReported, renderEmail } from "@/app/lib/email";
@@ -52,7 +53,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "You are not the accepted worker for this job" }, { status: 403 });
   }
 
-  const body = await req.json().catch(() => ({}));
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const { latitude, longitude } = body;
 
   if (latitude == null || longitude == null) {

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { requireAdmin, reviewCandidate } from "@/app/lib/github-intake";
 
 type Params = { params: Promise<{ id: string }> };
@@ -11,7 +12,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (guard) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
   const { id } = await params;
-  const body = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
   try {
     const candidate = await reviewCandidate({

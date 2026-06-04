@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 import { createIntakeRun, intakeCandidateSelect, requireAdmin } from "@/app/lib/github-intake";
 
@@ -22,7 +23,9 @@ export async function POST(req: NextRequest) {
   const guard = requireAdmin(user);
   if (guard) return NextResponse.json({ error: guard.error }, { status: guard.status });
 
-  const body = await req.json().catch(() => ({}));
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const run = await createIntakeRun({
     source: "manual-admin",
     dryRun: body.dryRun !== false,

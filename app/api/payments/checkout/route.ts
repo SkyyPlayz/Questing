@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { createDurableCheckoutSession, CheckoutFlowError } from "@/app/lib/paymentCheckout";
 import { prisma } from "@/app/lib/prisma";
 
@@ -16,7 +17,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Only posters can initiate payment" }, { status: 403 });
   }
 
-  const { jobId } = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const { jobId } = parsedBody.data;
   if (!jobId) {
     return NextResponse.json({ error: "jobId required" }, { status: 400 });
   }

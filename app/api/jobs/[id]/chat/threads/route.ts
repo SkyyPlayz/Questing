@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { canAccessChatThread, canWorkerCreatePrivateThread } from "@/app/lib/chat-authorization.mjs";
 import { createChatThreadIdempotently } from "@/app/lib/chat-thread-creation.mjs";
 
@@ -54,7 +55,9 @@ export async function POST(
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const body = await request.json();
+  const parsedBody = await parseJsonBody(request);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const { threadType, workerId } = body;
 
   if (!threadType || !["PUBLIC_QA", "PRIVATE"].includes(threadType)) {

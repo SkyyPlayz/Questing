@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 import { awardXP } from "@/app/lib/xp";
 
@@ -48,7 +49,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Not a participant on this job" }, { status: 403 });
   }
 
-  const { score, comment } = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const { score, comment } = parsedBody.data;
   if (!score || score < 1 || score > 5) {
     return NextResponse.json({ error: "score must be 1–5" }, { status: 400 });
   }

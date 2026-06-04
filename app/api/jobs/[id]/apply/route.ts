@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 import { awardXP } from "@/app/lib/xp";
 import { sendEmail, emailApplicationSubmitted, emailApplicationAccepted, emailApplicationRejected } from "@/app/lib/email";
@@ -25,7 +26,9 @@ export async function POST(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "Job is not open for applications" }, { status: 400 });
   }
 
-  const body = await req.json().catch(() => ({}));
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const { message } = body;
 
   const existing = await prisma.application.findUnique({
@@ -159,7 +162,9 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   const user = session.user as { id: string; role: string };
 
   const { id } = await params;
-  const body = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const { applicationId, action } = body;
 
   const job = await prisma.job.findUnique({ where: { id } });

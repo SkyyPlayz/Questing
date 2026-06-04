@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 
@@ -7,7 +8,9 @@ export async function PATCH(req: NextRequest) {
   if (!session?.user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   const user = session.user as { id: string };
 
-  const { location, skills } = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const { location, skills } = parsedBody.data;
 
   await prisma.$transaction([
     prisma.user.update({

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 
 export async function GET(req: NextRequest) {
@@ -30,7 +31,9 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: "Workers only" }, { status: 403 });
   }
 
-  const body = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
   const { emergencyContact, emergencyContactPhone } = body;
 
   if (emergencyContact && emergencyContact.length > 100) {

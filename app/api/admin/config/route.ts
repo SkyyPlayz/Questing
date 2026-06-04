@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { parseJsonBody } from "@/app/lib/api-json";
 import { prisma } from "@/app/lib/prisma";
 
 export async function GET() {
@@ -23,7 +24,9 @@ export async function POST(req: NextRequest) {
   const user = session.user as { role: string };
   if (user.role !== "ADMIN") return NextResponse.json({ error: "Admin only" }, { status: 403 });
 
-  const body = await req.json();
+  const parsedBody = await parseJsonBody(req);
+  if (!parsedBody.ok) return parsedBody.response;
+  const body = parsedBody.data;
 
   if (!body.key || !body.value) {
     return NextResponse.json({ error: "key and value required" }, { status: 400 });
