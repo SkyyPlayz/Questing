@@ -2,6 +2,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { REGISTRATION_ERROR_FALLBACK, getRegistrationErrorMessage } from "@/app/lib/registration-error";
 
 export default function RegisterPage() {
   const router = useRouter();
@@ -13,17 +14,22 @@ export default function RegisterPage() {
     e.preventDefault();
     setLoading(true);
     setError("");
-    const res = await fetch("/api/users", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
-    });
-    setLoading(false);
-    if (!res.ok) {
-      const data = await res.json();
-      setError(data.error || "Registration failed");
-    } else {
-      router.push("/login");
+    try {
+      const res = await fetch("/api/users", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(form),
+      });
+
+      if (!res.ok) {
+        setError(await getRegistrationErrorMessage(res));
+      } else {
+        router.push("/login");
+      }
+    } catch {
+      setError(REGISTRATION_ERROR_FALLBACK);
+    } finally {
+      setLoading(false);
     }
   }
 
