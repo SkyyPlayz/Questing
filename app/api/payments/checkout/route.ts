@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
+import { createDurableCheckoutSession, CheckoutFlowError } from "@/app/lib/paymentCheckout";
 import { prisma } from "@/app/lib/prisma";
-import { calculateCheckoutAmountCents } from "@/app/lib/paymentAmount";
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!);
 
@@ -33,49 +33,66 @@ export async function POST(req: NextRequest) {
   if (job.status !== "IN_PROGRESS") {
     return NextResponse.json({ error: "Job must be IN_PROGRESS to initiate payment" }, { status: 400 });
   }
-  if (job.payment) {
-    return NextResponse.json({ error: "Payment already initiated for this job" }, { status: 409 });
-  }
-
-  let amountCents: number;
-  try {
-    amountCents = calculateCheckoutAmountCents(job);
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Invalid job payment amount" },
-      { status: 400 },
-    );
-  }
   const baseUrl = process.env.NEXTAUTH_URL ?? "http://localhost:3000";
 
-  const checkoutSession = await stripe.checkout.sessions.create({
-    mode: "payment",
-    payment_intent_data: {
-      capture_method: "manual",
-    },
-    line_items: [
-      {
-        price_data: {
-          currency: "usd",
-          unit_amount: amountCents,
-          product_data: { name: job.title },
-        },
-        quantity: 1,
-      },
-    ],
-    success_url: `${baseUrl}/jobs/${jobId}?payment=success`,
-    cancel_url: `${baseUrl}/jobs/${jobId}?payment=cancelled`,
-    metadata: { jobId },
-  });
+  try {
+    const checkout = await createDurableCheckoutSession(job, baseUrl, {
+      createPendingPayment: (data) =>
+        prisma.payment.create({
+          data: {
+            jobId: data.jobId,
+            amount: data.amount,
+            status: "PENDING",
+          },
+        }),
+      createStripeCheckoutSession: ({ amountCents, jobId, paymentId, title }) =>
+        stripe.checkout.sessions.create({
+          mode: "payment",
+          payment_intent_data: {
+            capture_method: "manual",
+            metadata: { jobId, paymentId },
+          },
+          line_items: [
+            {
+              price_data: {
+                currency: "usd",
+                unit_amount: amountCents,
+                product_data: { name: title },
+              },
+              quantity: 1,
+            },
+          ],
+          success_url: `${baseUrl}/jobs/${jobId}?payment=success`,
+          cancel_url: `${baseUrl}/jobs/${jobId}?payment=cancelled`,
+          metadata: { jobId, paymentId },
+        }),
+      expireStripeCheckoutSession: (sessionId) => stripe.checkout.sessions.expire(sessionId).then(() => undefined),
+      markPaymentVoided: (paymentId) =>
+        prisma.payment.update({ where: { id: paymentId }, data: { status: "VOIDED" } }).then(() => undefined),
+      resetPaymentForRetry: (paymentId, data) =>
+        prisma.payment.update({
+          where: { id: paymentId },
+          data: {
+            amount: data.amount,
+            status: "PENDING",
+            stripeCheckoutSessionId: null,
+            stripePaymentIntentId: null,
+          },
+        }),
+      updatePaymentCheckoutSession: (paymentId, sessionId) =>
+        prisma.payment
+          .update({
+            where: { id: paymentId },
+            data: { stripeCheckoutSessionId: sessionId },
+          })
+          .then(() => undefined),
+    });
 
-  await prisma.payment.create({
-    data: {
-      jobId,
-      stripeCheckoutSessionId: checkoutSession.id,
-      amount: amountCents,
-      status: "PENDING",
-    },
-  });
-
-  return NextResponse.json({ url: checkoutSession.url });
+    return NextResponse.json({ url: checkout.url });
+  } catch (error) {
+    if (error instanceof CheckoutFlowError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    return NextResponse.json({ error: "Checkout could not be initialized" }, { status: 500 });
+  }
 }
