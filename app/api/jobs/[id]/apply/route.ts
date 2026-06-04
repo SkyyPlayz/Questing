@@ -4,6 +4,7 @@ import { prisma } from "@/app/lib/prisma";
 import { awardXP } from "@/app/lib/xp";
 import { sendEmail, emailApplicationSubmitted, emailApplicationAccepted, emailApplicationRejected } from "@/app/lib/email";
 import { createChatThreadIdempotently } from "@/app/lib/chat-thread-creation.mjs";
+import { APPLICATION_DECISION_ERROR, canDecideApplication } from "@/app/lib/applicationDecision";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -177,28 +178,45 @@ export async function PATCH(req: NextRequest, { params }: Params) {
 
   if (action === "accept") {
     // Only allowed for PENDING apps when job is still OPEN (non-FCFS fallback)
-    if (application.status !== "PENDING" || job.status !== "OPEN") {
-      return NextResponse.json({ error: "Cannot accept — job is FCFS-locked or application not pending" }, { status: 400 });
+    if (!canDecideApplication({ jobStatus: job.status, applicationStatus: application.status })) {
+      return NextResponse.json({ error: APPLICATION_DECISION_ERROR }, { status: 400 });
     }
-    await prisma.$transaction(async (tx) => {
-      await tx.application.update({
-        where: { id: applicationId },
+    const accepted = await prisma.$transaction(async (tx) => {
+      const applicationUpdate = await tx.application.updateMany({
+        where: { id: applicationId, jobId: id, status: "PENDING", job: { status: "OPEN" } },
         data: { status: "ACCEPTED" },
       });
-      await tx.application.updateMany({
-        where: { jobId: id, id: { not: applicationId } },
-        data: { status: "REJECTED" },
-      });
-      await tx.job.update({
-        where: { id },
+      if (applicationUpdate.count !== 1) {
+        return false;
+      }
+
+      const jobUpdate = await tx.job.updateMany({
+        where: { id, status: "OPEN" },
         data: { status: "IN_PROGRESS", fcfsLockedAt: null },
+      });
+      if (jobUpdate.count !== 1) {
+        throw new Error(APPLICATION_DECISION_ERROR);
+      }
+
+      await tx.application.updateMany({
+        where: { jobId: id, id: { not: applicationId }, status: "PENDING" },
+        data: { status: "REJECTED" },
       });
       await createChatThreadIdempotently(tx, {
         jobId: id,
         threadType: "PRIVATE",
         workerId: application.workerId,
       });
+      return true;
+    }).catch((error) => {
+      if (error instanceof Error && error.message === APPLICATION_DECISION_ERROR) {
+        return false;
+      }
+      throw error;
     });
+    if (!accepted) {
+      return NextResponse.json({ error: APPLICATION_DECISION_ERROR }, { status: 400 });
+    }
     await awardXP(application.workerId, "JOB_ACCEPTED", id);
 
     // Send acceptance email to worker
@@ -232,13 +250,24 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
   } else if (action === "reject") {
     // Only allowed for PENDING apps when job is still OPEN
-    if (application.status !== "PENDING" || job.status !== "OPEN") {
-      return NextResponse.json({ error: "Cannot reject — job is FCFS-locked or application not pending" }, { status: 400 });
+    if (!canDecideApplication({ jobStatus: job.status, applicationStatus: application.status })) {
+      return NextResponse.json({ error: APPLICATION_DECISION_ERROR }, { status: 400 });
     }
-    await prisma.application.update({
-      where: { id: applicationId },
-      data: { status: "REJECTED" },
+    const rejected = await prisma.$transaction(async (tx) => {
+      const applicationUpdate = await tx.application.updateMany({
+        where: { id: applicationId, jobId: id, status: "PENDING", job: { status: "OPEN" } },
+        data: { status: "REJECTED" },
+      });
+      return applicationUpdate.count === 1;
+    }).catch((error) => {
+      if (error instanceof Error && error.message === APPLICATION_DECISION_ERROR) {
+        return false;
+      }
+      throw error;
     });
+    if (!rejected) {
+      return NextResponse.json({ error: APPLICATION_DECISION_ERROR }, { status: 400 });
+    }
 
     // Send rejection email to worker
     const worker = await prisma.user.findUnique({ where: { id: application.workerId }, select: { name: true, email: true } });
