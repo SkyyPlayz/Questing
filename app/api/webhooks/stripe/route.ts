@@ -25,9 +25,13 @@ export async function POST(req: NextRequest) {
       const session = event.data.object as Stripe.Checkout.Session;
       // Handle job payment checkout
       if (session.payment_intent && session.metadata?.jobId) {
+        const paymentWhere = session.metadata.paymentId
+          ? { OR: [{ id: session.metadata.paymentId }, { stripeCheckoutSessionId: session.id }] }
+          : { stripeCheckoutSessionId: session.id };
         await prisma.payment.updateMany({
-          where: { stripeCheckoutSessionId: session.id },
+          where: paymentWhere,
           data: {
+            stripeCheckoutSessionId: session.id,
             stripePaymentIntentId: session.payment_intent as string,
             status: "HELD",
           },
@@ -105,8 +109,11 @@ export async function POST(req: NextRequest) {
       }
       if (pi.metadata?.jobId) {
         // Job payment failed — void payment and any pending platform fee
+        const paymentWhere = pi.metadata.paymentId
+          ? { OR: [{ id: pi.metadata.paymentId }, { stripePaymentIntentId: pi.id }] }
+          : { stripePaymentIntentId: pi.id };
         await prisma.payment.updateMany({
-          where: { stripePaymentIntentId: pi.id, status: "PENDING" },
+          where: { ...paymentWhere, status: "PENDING" },
           data: { status: "VOIDED" },
         });
         await prisma.platformFee.updateMany({
