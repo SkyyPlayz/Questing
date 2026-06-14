@@ -2,17 +2,16 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
 import { RiskLevel } from "@prisma/client";
+import { calculateRiskLevel, inferIncidentSubjectUserId } from "@/app/lib/safetyIncident";
 
 type Params = { params: Promise<{ id: string }> };
 
 async function recomputeRiskScore(userId: string) {
   const incidents = await prisma.safetyIncident.findMany({
-    where: { reporterId: userId, status: "RESOLVED" },
+    where: { subjectUserId: userId, status: "RESOLVED" },
   });
   const count = incidents.length;
-  let riskLevel: RiskLevel = "LOW";
-  if (count >= 3 || incidents.some((i) => i.severity === "CRITICAL")) riskLevel = "HIGH";
-  else if (count >= 1 || incidents.some((i) => i.severity === "HIGH")) riskLevel = "MEDIUM";
+  const riskLevel = calculateRiskLevel(incidents) as RiskLevel;
 
   await prisma.riskScore.upsert({
     where: { userId },
@@ -34,19 +33,50 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     return NextResponse.json({ error: "action must be resolve or dismiss" }, { status: 400 });
   }
 
-  const incident = await prisma.safetyIncident.findUnique({ where: { id } });
+  const incident = await prisma.safetyIncident.findUnique({
+    where: { id },
+    include: {
+      job: {
+        select: {
+          posterId: true,
+          applications: {
+            where: { status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } },
+            select: { workerId: true },
+          },
+        },
+      },
+    },
+  });
   if (!incident) return NextResponse.json({ error: "Not found" }, { status: 404 });
+
+  let subjectUserId = incident.subjectUserId;
+  if (!subjectUserId) {
+    try {
+      subjectUserId = inferIncidentSubjectUserId({
+        reporterId: incident.reporterId,
+        posterId: incident.job.posterId,
+        acceptedWorkerIds: incident.job.applications.map((application) => application.workerId),
+      });
+    } catch {
+      subjectUserId = null;
+    }
+  }
+
+  if (action === "resolve" && !subjectUserId) {
+    return NextResponse.json({ error: "subjectUserId required before resolving this incident" }, { status: 400 });
+  }
 
   const updated = await prisma.safetyIncident.update({
     where: { id },
     data: {
       status: action === "resolve" ? "RESOLVED" : "DISMISSED",
       resolution: resolution || null,
+      subjectUserId,
     },
   });
 
-  if (action === "resolve") {
-    await recomputeRiskScore(incident.reporterId);
+  if (subjectUserId) {
+    await recomputeRiskScore(subjectUserId);
   }
 
   return NextResponse.json(updated);

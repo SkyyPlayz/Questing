@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "rm -rf /tmp/questing-unit-tests && tsc tests/paymentAmount.test.ts tests/activeJobsQuery.test.ts tests/stripe.test.ts app/lib/paymentAmount.ts app/lib/activeJobsQuery.ts app/lib/stripe.ts --module commonjs --target es2022 --outDir /tmp/questing-unit-tests --esModuleInterop --moduleResolution node --skipLibCheck && NODE_PATH=$PWD/node_modules node --test /tmp/questing-unit-tests/tests/*.test.js"
+    "test": "rm -rf /tmp/questing-unit-tests && tsc tests/paymentAmount.test.ts tests/activeJobsQuery.test.ts tests/stripe.test.ts tests/accountStatus.test.ts tests/publicJobsQuery.test.ts tests/safetyIncident.test.ts tests/jobDetailVisibility.test.ts tests/disputePaymentResolution.test.ts tests/paymentReleasePolicy.test.ts tests/jobInputValidation.test.ts tests/ratingInputValidation.test.ts app/lib/paymentAmount.ts app/lib/activeJobsQuery.ts app/lib/stripe.ts app/lib/accountStatus.ts app/lib/publicJobsQuery.ts app/lib/safetyIncident.ts app/lib/jobDetailVisibility.ts app/lib/disputePaymentResolution.ts app/lib/paymentReleasePolicy.ts app/lib/jobInputValidation.ts app/lib/ratingInputValidation.ts --module commonjs --target es2022 --outDir /tmp/questing-unit-tests --esModuleInterop --moduleResolution node --skipLibCheck && NODE_PATH=$PWD/node_modules node --test /tmp/questing-unit-tests/tests/*.test.js"
   },
   "dependencies": {
     "@auth/prisma-adapter": "^2.11.2",

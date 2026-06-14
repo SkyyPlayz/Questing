@@ -22,7 +22,11 @@ export default function LoginPage() {
     });
     setLoading(false);
     if (res?.error) {
-      setError("Invalid email or password");
+      setError(
+        (res as { code?: string }).code === "account_inactive"
+          ? "Your account is not active. Check verification status or contact support."
+          : "Invalid email or password"
+      );
     } else {
       router.push("/jobs");
     }

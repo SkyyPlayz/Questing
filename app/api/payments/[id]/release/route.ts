@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type Stripe from "stripe";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { resolveAdminHeldPaymentReleaseAction } from "@/app/lib/paymentReleasePolicy";
 import { getStripeClient, isStripeConfigurationError } from "@/app/lib/stripe";
 
 type Params = { params: Promise<{ id: string }> };
@@ -30,17 +31,18 @@ export async function POST(req: NextRequest, { params }: Params) {
 
   try {
     const stripe = getStripeClient();
+    const releaseAction = resolveAdminHeldPaymentReleaseAction(action);
 
-    if (action === "capture") {
+    if (releaseAction?.action === "capture") {
       await stripe.paymentIntents.capture(payment.stripePaymentIntentId);
       const updated = await prisma.payment.update({
         where: { id },
-        data: { status: "RELEASED" },
+        data: { status: releaseAction.paymentStatus },
       });
       return NextResponse.json(updated);
     }
 
-    if (action === "refund") {
+    if (releaseAction?.action === "refund") {
       const refundParams: Stripe.RefundCreateParams = {
         payment_intent: payment.stripePaymentIntentId,
       };
@@ -48,7 +50,7 @@ export async function POST(req: NextRequest, { params }: Params) {
       await stripe.refunds.create(refundParams);
       const updated = await prisma.payment.update({
         where: { id },
-        data: { status: "REFUNDED" },
+        data: { status: releaseAction.paymentStatus },
       });
       return NextResponse.json(updated);
     }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
 import { prisma } from "@/app/lib/prisma";
+import { validateRatingScore } from "@/app/lib/ratingInputValidation";
 
 type Params = { params: Promise<{ id: string }> };
 
@@ -48,8 +49,9 @@ export async function POST(req: NextRequest, { params }: Params) {
   }
 
   const { score, comment } = await req.json();
-  if (!score || score < 1 || score > 5) {
-    return NextResponse.json({ error: "score must be 1–5" }, { status: 400 });
+  const scoreValidation = validateRatingScore(score);
+  if (!scoreValidation.ok) {
+    return NextResponse.json({ error: scoreValidation.error }, { status: 400 });
   }
 
   // Determine who is being rated
@@ -65,7 +67,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   if (existing) return NextResponse.json({ error: "Already rated" }, { status: 409 });
 
   const rating = await prisma.rating.create({
-    data: { jobId, fromUserId: user.id, toUserId, score, comment: comment || null },
+    data: { jobId, fromUserId: user.id, toUserId, score: scoreValidation.score, comment: comment || null },
   });
 
   await recomputeCompetency(toUserId);

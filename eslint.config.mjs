@@ -12,6 +12,9 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // Local Paperclip execution worktrees can be nested under the checkout.
+    ".paperclip/**",
+    ".paperclip-worktrees/**",
   ]),
 ]);
 

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import { resolveHeldDisputePayment } from "@/app/lib/disputePaymentResolution";
 import { prisma } from "@/app/lib/prisma";
 import { getStripeClient, isStripeConfigurationError } from "@/app/lib/stripe";
 import { DisputeOutcome } from "@prisma/client";
@@ -32,17 +33,21 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   if (payment?.stripePaymentIntentId && payment.status === "HELD") {
     try {
       const stripe = getStripeClient();
-      if (outcome === "WORKER_FAVOR" || outcome === "POSTER_FAVOR") {
-        await stripe.paymentIntents.capture(payment.stripePaymentIntentId);
-        await prisma.payment.update({ where: { id: payment.id }, data: { status: "RELEASED" } });
-      } else if (outcome === "SPLIT") {
-        const half = Math.floor(payment.amount / 2);
-        await stripe.paymentIntents.capture(payment.stripePaymentIntentId, { amount_to_capture: half });
-        await prisma.payment.update({ where: { id: payment.id }, data: { status: "RELEASED" } });
-      } else if (outcome === "DISMISSED") {
+      const resolution = resolveHeldDisputePayment(outcome, payment.amount);
+
+      if (resolution.action === "capture") {
+        if (resolution.amountToCapture !== undefined) {
+          await stripe.paymentIntents.capture(payment.stripePaymentIntentId, {
+            amount_to_capture: resolution.amountToCapture,
+          });
+        } else {
+          await stripe.paymentIntents.capture(payment.stripePaymentIntentId);
+        }
+      } else {
         await stripe.paymentIntents.cancel(payment.stripePaymentIntentId);
-        await prisma.payment.update({ where: { id: payment.id }, data: { status: "VOIDED" } });
       }
+
+      await prisma.payment.update({ where: { id: payment.id }, data: { status: resolution.paymentStatus } });
     } catch (error) {
       if (isStripeConfigurationError(error)) {
         return NextResponse.json({ error: error.message }, { status: 500 });

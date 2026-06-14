@@ -84,18 +84,21 @@ model User {
   createdAt     DateTime   @default(now())
   updatedAt     DateTime   @updatedAt
 
-  postedJobs      Job[]            @relation("PosterJobs")
-  applications    Application[]
-  sessions        Session[]
-  accounts        Account[]
-  workerProfile   WorkerProfile?
-  posterProfile   PosterProfile?
-  ratingsGiven    Rating[]         @relation("RatingFrom")
-  ratingsReceived Rating[]         @relation("RatingTo")
-  competencyScore CompetencyScore?
-  riskScore       RiskScore?
-  incidents       SafetyIncident[] @relation("IncidentReporter")
-  adminNotes      AdminNote[]
+  postedJobs          Job[]                @relation("PosterJobs")
+  applications        Application[]
+  sessions            Session[]
+  accounts            Account[]
+  workerProfile       WorkerProfile?
+  posterProfile       PosterProfile?
+  ratingsGiven        Rating[]             @relation("RatingFrom")
+  ratingsReceived     Rating[]             @relation("RatingTo")
+  competencyScore     CompetencyScore?
+  riskScore           RiskScore?
+  incidents           SafetyIncident[]     @relation("IncidentReporter")
+  subjectIncidents    SafetyIncident[]     @relation("IncidentSubject")
+  backgroundCheckFees BackgroundCheckFee[]
+  jobCheckIns         JobCheckIn[]
+  adminNotes          AdminNote[]
 }
 
 model WorkerProfile {
@@ -156,39 +159,41 @@ model VerificationToken {
 }
 
 model Job {
-  id           String         @id @default(cuid())
+  id           String           @id @default(cuid())
   title        String
   description  String
   category     String
   location     String
   payRate      Float
-  payUnit      String         @default("hour")
+  payUnit      String           @default("hour")
   startDate    DateTime?
   endDate      DateTime?
-  status       JobStatus      @default(DRAFT)
+  status       JobStatus        @default(DRAFT)
   posterId     String
-  poster       User           @relation("PosterJobs", fields: [posterId], references: [id])
+  poster       User             @relation("PosterJobs", fields: [posterId], references: [id])
   applications Application[]
   payment      Payment?
+  platformFee  PlatformFee?
   ratings      Rating[]
   disputes     Dispute[]
   incidents    SafetyIncident[]
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  checkIns     JobCheckIn[]
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
 }
 
 model Application {
-  id        String            @id @default(cuid())
-  jobId     String
-  workerId  String
-  message   String?
-  status    ApplicationStatus @default(PENDING)
+  id         String            @id @default(cuid())
+  jobId      String
+  workerId   String
+  message    String?
+  status     ApplicationStatus @default(PENDING)
   acceptedAt DateTime?
-  job       Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  worker    User              @relation(fields: [workerId], references: [id])
-  checkIns  JobCheckIn[]
-  createdAt DateTime          @default(now())
-  updatedAt DateTime          @updatedAt
+  job        Job               @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  worker     User              @relation(fields: [workerId], references: [id])
+  checkIns   JobCheckIn[]
+  createdAt  DateTime          @default(now())
+  updatedAt  DateTime          @updatedAt
 
   @@unique([jobId, workerId])
 }
@@ -222,29 +227,33 @@ model Rating {
 }
 
 model CompetencyScore {
-  id            String   @id @default(cuid())
-  userId        String   @unique
-  avgRating     Float    @default(0)
-  jobsCompleted Int      @default(0)
-  reliabilityPct Float   @default(0)
-  overallScore  Float    @default(0)
-  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  updatedAt     DateTime @updatedAt
+  id             String   @id @default(cuid())
+  userId         String   @unique
+  avgRating      Float    @default(0)
+  jobsCompleted  Int      @default(0)
+  reliabilityPct Float    @default(0)
+  overallScore   Float    @default(0)
+  user           User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  updatedAt      DateTime @updatedAt
 }
 
 model SafetyIncident {
-  id          String         @id @default(cuid())
-  jobId       String
-  reporterId  String
-  severity    String
-  description String
-  status      IncidentStatus @default(OPEN)
-  resolution  String?
-  riskLevel   RiskLevel?
-  job         Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  reporter    User           @relation("IncidentReporter", fields: [reporterId], references: [id])
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
+  id            String         @id @default(cuid())
+  jobId         String
+  reporterId    String
+  subjectUserId String?
+  severity      String
+  description   String
+  status        IncidentStatus @default(OPEN)
+  resolution    String?
+  riskLevel     RiskLevel?
+  job           Job            @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  reporter      User           @relation("IncidentReporter", fields: [reporterId], references: [id])
+  subject       User?          @relation("IncidentSubject", fields: [subjectUserId], references: [id])
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  @@index([subjectUserId, status])
 }
 
 model RiskScore {
@@ -289,49 +298,49 @@ enum AdminConfigKey {
 }
 
 model PlatformFee {
-  id        String   @id @default(cuid())
-  jobId     String   @unique
+  id        String        @id @default(cuid())
+  jobId     String        @unique
   amount    Int
-  type      FeeType  @default(PLATFORM_SERVICE)
-  percent   Float    @default(0.10)
+  type      FeeType       @default(PLATFORM_SERVICE)
+  percent   Float         @default(0.10)
   status    PaymentStatus @default(PENDING)
-  job       Job      @relation(fields: [jobId], references: [id])
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  job       Job           @relation(fields: [jobId], references: [id])
+  createdAt DateTime      @default(now())
+  updatedAt DateTime      @updatedAt
 }
 
 model BackgroundCheckFee {
-  id        String   @id @default(cuid())
-  workerId  String
-  amount    Int
-  status    PaymentStatus @default(PENDING)
-  worker    User     @relation(fields: [workerId], references: [id])
+  id                    String        @id @default(cuid())
+  workerId              String
+  amount                Int
+  status                PaymentStatus @default(PENDING)
+  worker                User          @relation(fields: [workerId], references: [id])
   stripePaymentIntentId String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  createdAt             DateTime      @default(now())
+  updatedAt             DateTime      @updatedAt
 }
 
 model AdminConfig {
-  id        String   @id @default(cuid())
+  id        String         @id @default(cuid())
   key       AdminConfigKey @unique
   value     String
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime       @updatedAt
 }
 
 model JobCheckIn {
-  id         String   @id @default(cuid())
-  jobId      String
-  workerId   String
-  latitude   Float
-  longitude  Float
-  timestamp  DateTime @default(now())
-  verified   Boolean  @default(false)
-  distanceM  Float?
-  application Application @relation(fields: [applicationId], references: [id])
+  id            String      @id @default(cuid())
+  jobId         String
+  workerId      String
+  latitude      Float
+  longitude     Float
+  timestamp     DateTime    @default(now())
+  verified      Boolean     @default(false)
+  distanceM     Float?
+  application   Application @relation(fields: [applicationId], references: [id])
   applicationId String
-  job        Job      @relation(fields: [jobId], references: [id], onDelete: Cascade)
-  worker     User     @relation(fields: [workerId], references: [id])
-  createdAt  DateTime @default(now())
+  job           Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  worker        User        @relation(fields: [workerId], references: [id])
+  createdAt     DateTime    @default(now())
 
   @@index([jobId, workerId])
 }

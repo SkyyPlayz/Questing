@@ -1,24 +1,36 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/app/lib/auth";
+import {
+  buildJobDetailJobQuery,
+  buildJobDetailApplicationsQuery,
+  canViewJobApplications,
+} from "@/app/lib/jobDetailVisibility";
+import { validateJobUpdateInput } from "@/app/lib/jobInputValidation";
 import { prisma } from "@/app/lib/prisma";
 import { getStripeClient, isStripeConfigurationError } from "@/app/lib/stripe";
+import { resolveJobStatusHeldPaymentAction } from "@/app/lib/paymentReleasePolicy";
 import { JobStatus } from "@prisma/client";
 
 type Params = { params: Promise<{ id: string }> };
 
 export async function GET(_req: NextRequest, { params }: Params) {
   const { id } = await params;
-  const job = await prisma.job.findUnique({
-    where: { id },
-    include: {
-      poster: { select: { id: true, name: true, email: true } },
-      applications: {
-        include: { worker: { select: { id: true, name: true, email: true } } },
-      },
-    },
-  });
+  const session = await auth();
+  const user = session?.user as { id?: string; role?: string } | undefined;
+
+  const job = await prisma.job.findUnique(buildJobDetailJobQuery(id));
   if (!job) return NextResponse.json({ error: "Not found" }, { status: 404 });
-  return NextResponse.json(job);
+
+  const applicationsQuery = buildJobDetailApplicationsQuery(
+    id,
+    user,
+    canViewJobApplications(job, user),
+  );
+  const applications = applicationsQuery
+    ? await prisma.application.findMany(applicationsQuery)
+    : [];
+
+  return NextResponse.json({ ...job, applications });
 }
 
 export async function PATCH(req: NextRequest, { params }: Params) {
@@ -37,7 +49,7 @@ export async function PATCH(req: NextRequest, { params }: Params) {
   }
 
   const body = await req.json();
-  const { status, title, description, category, location, payRate, payUnit, startDate, endDate } = body;
+  const { status } = body;
 
   // Validate status transitions
   const validTransitions: Record<JobStatus, JobStatus[]> = {
@@ -58,14 +70,23 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     }
   }
 
+  const validation = validateJobUpdateInput(body, {
+    startDate: job.startDate,
+    endDate: job.endDate,
+  });
+  if (!validation.ok) {
+    return NextResponse.json({ error: validation.error }, { status: 400 });
+  }
+
   let stripeForPaymentAction: ReturnType<typeof getStripeClient> | null = null;
   const paymentIntentId = job.payment?.stripePaymentIntentId;
-  const needsStripePaymentAction =
-    paymentIntentId &&
-    job.payment?.status === "HELD" &&
-    (status === "COMPLETED" || status === "CANCELLED");
+  const heldPaymentAction = resolveJobStatusHeldPaymentAction({
+    requestedStatus: status as JobStatus | undefined,
+    paymentStatus: job.payment?.status,
+    paymentIntentId,
+  });
 
-  if (needsStripePaymentAction) {
+  if (heldPaymentAction.action !== "none") {
     try {
       stripeForPaymentAction = getStripeClient();
     } catch (error) {
@@ -80,25 +101,18 @@ export async function PATCH(req: NextRequest, { params }: Params) {
     where: { id },
     include: { payment: true },
     data: {
-      ...(title && { title }),
-      ...(description && { description }),
-      ...(category && { category }),
-      ...(location && { location }),
-      ...(payRate !== undefined && { payRate: parseFloat(payRate) }),
-      ...(payUnit && { payUnit }),
-      ...(startDate !== undefined && { startDate: startDate ? new Date(startDate) : null }),
-      ...(endDate !== undefined && { endDate: endDate ? new Date(endDate) : null }),
+      ...validation.data,
       ...(status && { status: status as JobStatus }),
     },
   });
 
   if (stripeForPaymentAction && paymentIntentId && updated.payment) {
-    if (status === "COMPLETED") {
-      await stripeForPaymentAction.paymentIntents.capture(paymentIntentId);
-      await prisma.payment.update({ where: { id: updated.payment.id }, data: { status: "RELEASED" } });
-    } else if (status === "CANCELLED") {
+    if (heldPaymentAction.action === "cancel") {
       await stripeForPaymentAction.paymentIntents.cancel(paymentIntentId);
-      await prisma.payment.update({ where: { id: updated.payment.id }, data: { status: "VOIDED" } });
+      await prisma.payment.update({
+        where: { id: updated.payment.id },
+        data: { status: heldPaymentAction.paymentStatus },
+      });
     }
   }
 

@@ -1,6 +1,11 @@
 import { notFound } from "next/navigation";
 import { prisma } from "@/app/lib/prisma";
 import { auth } from "@/app/lib/auth";
+import {
+  buildJobDetailApplicationsQuery,
+  buildJobDetailJobQuery,
+  canViewJobApplications,
+} from "@/app/lib/jobDetailVisibility";
 import JobDetailClient from "./JobDetailClient";
 
 type Params = { params: Promise<{ id: string }> };
@@ -10,27 +15,29 @@ export default async function JobDetailPage({ params }: Params) {
   const session = await auth();
   const user = session?.user as { id?: string; role?: string } | undefined;
 
-  const job = await prisma.job.findUnique({
-    where: { id },
-    include: {
-      poster: { select: { id: true, name: true } },
-      applications: {
-        include: { worker: { select: { id: true, name: true, email: true } } },
-      },
-    },
-  });
+  const job = await prisma.job.findUnique(buildJobDetailJobQuery(id));
 
   if (!job) notFound();
 
+  const applicationsQuery = buildJobDetailApplicationsQuery(
+    id,
+    user,
+    canViewJobApplications(job, user),
+  );
+  const applications = applicationsQuery
+    ? await prisma.application.findMany(applicationsQuery)
+    : [];
+  const jobDetail = { ...job, applications };
+
   const userApplication = user
-    ? job.applications.find((a) => a.workerId === user.id)
+    ? applications.find((application) => application.workerId === user.id)
     : null;
 
   const isPoster = user?.id === job.posterId;
 
   return (
     <JobDetailClient
-      job={JSON.parse(JSON.stringify(job))}
+      job={JSON.parse(JSON.stringify(jobDetail))}
       userId={user?.id}
       userRole={user?.role}
       userApplication={userApplication ? JSON.parse(JSON.stringify(userApplication)) : null}

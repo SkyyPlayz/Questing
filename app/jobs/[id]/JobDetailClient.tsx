@@ -6,8 +6,8 @@ type Application = {
   id: string;
   workerId: string;
   status: string;
-  message: string | null;
-  worker: { id: string; name: string | null; email: string };
+  message?: string | null;
+  worker?: { id: string; name: string | null; email: string };
 };
 
 type Job = {
@@ -156,8 +156,12 @@ export default function JobDetailClient({
                   {job.applications.map((app) => (
                     <div key={app.id} className="border rounded p-3 flex items-center justify-between">
                       <div>
-                        <p className="font-medium">{app.worker.name}</p>
-                        <p className="text-xs text-gray-500">{app.worker.email}</p>
+                        {app.worker && (
+                          <>
+                            <p className="font-medium">{app.worker.name}</p>
+                            <p className="text-xs text-gray-500">{app.worker.email}</p>
+                          </>
+                        )}
                         {app.message && <p className="text-sm text-gray-700 mt-1">{app.message}</p>}
                         <span
                           className={`text-xs font-medium mt-1 inline-block px-2 py-0.5 rounded-full ${
