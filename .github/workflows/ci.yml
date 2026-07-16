@@ -34,10 +34,14 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Safe placeholder values so the build never needs real secrets.
+      # Stripe clients are constructed at module load in the API routes, so a
+      # (fake) key must be present for `next build` page-data collection.
       DATABASE_URL: postgresql://user:password@localhost:5432/questing
       NEXTAUTH_URL: http://localhost:3000
       NEXTAUTH_SECRET: ci-placeholder-not-a-real-secret
       AUTH_SECRET: ci-placeholder-not-a-real-secret
+      STRIPE_SECRET_KEY: sk_test_placeholder_ci_not_real
+      STRIPE_WEBHOOK_SECRET: whsec_placeholder_ci_not_real
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
