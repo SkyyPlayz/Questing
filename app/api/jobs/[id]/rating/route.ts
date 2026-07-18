@@ -10,7 +10,7 @@ async function recomputeCompetency(userId: string) {
   const avgRating = ratings.length ? ratings.reduce((s, r) => s + r.score, 0) / ratings.length : 0;
 
   const jobs = await prisma.job.findMany({
-    where: { applications: { some: { workerId: userId, status: "ACCEPTED" } } },
+    where: { applications: { some: { workerId: userId, status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } } } },
     select: { status: true },
   });
   const completed = jobs.filter((j) => j.status === "COMPLETED").length;
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest, { params }: Params) {
   const { id: jobId } = await params;
   const job = await prisma.job.findUnique({
     where: { id: jobId },
-    include: { applications: { where: { status: "ACCEPTED" } } },
+    include: { applications: { where: { status: { in: ["ACCEPTED", "FCFS_ACCEPTED"] } } } },
   });
 
   if (!job) return NextResponse.json({ error: "Job not found" }, { status: 404 });
