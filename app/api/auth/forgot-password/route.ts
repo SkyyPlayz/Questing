@@ -1,23 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/app/lib/prisma";
 import { escapeHtml, sendEmail, validateEmailUrl } from "@/app/lib/email";
+import { normalizeEmail } from "@/app/lib/email-normalization";
 import { replaceVerificationToken } from "@/app/lib/auth-tokens";
 import crypto from "crypto";
 
 export async function POST(req: NextRequest) {
   const { email } = await req.json();
-  if (!email) return NextResponse.json({ error: "Email required" }, { status: 400 });
+  const normalizedEmail = normalizeEmail(email);
+  if (!normalizedEmail) return NextResponse.json({ error: "Email required" }, { status: 400 });
 
-  const user = await prisma.user.findUnique({ where: { email } });
+  const user = await prisma.user.findFirst({
+    where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+  });
   // Always return 200 to avoid user enumeration
   if (!user) return NextResponse.json({ ok: true });
 
   const token = crypto.randomBytes(32).toString("hex");
   const expires = new Date(Date.now() + 1000 * 60 * 60); // 1 hour
 
-  await replaceVerificationToken(`reset:${email}`, token, expires);
+  await replaceVerificationToken(`reset:${normalizedEmail}`, token, expires);
 
-  const resetUrl = validateEmailUrl(`${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/reset-password?token=${token}&email=${encodeURIComponent(email)}`);
+  const resetUrl = validateEmailUrl(`${process.env.NEXTAUTH_URL ?? "http://localhost:3000"}/reset-password?token=${token}&email=${encodeURIComponent(normalizedEmail)}`);
 
   await sendEmail({
     to: { email: user.email, name: user.name ?? undefined },
