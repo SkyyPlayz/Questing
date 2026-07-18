@@ -38,3 +38,10 @@ You can check out [the Next.js GitHub repository](https://github.com/vercel/next
 The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
 
 Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+
+## Security audit baseline (2026-05-25)
+
+- `@hono/node-server` (`GHSA-92pp-h63x-v22m`) is remediated by npm override to `1.19.13` via `@prisma/dev`.
+- `postcss` (`GHSA-qx2v-qp2m-jg93`) remains reported through `next@16.2.6` in this lockfile.
+  - Current stable `next` available in this environment is `16.2.6`, and npm audit does not provide a non-breaking patched stable upgrade path.
+  - Risk acceptance: temporary, tracked. Keep monitoring Next.js releases and remove this exception once a patched stable version is available.
